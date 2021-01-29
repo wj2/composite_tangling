@@ -1,6 +1,7 @@
 
 import itertools as it
 import scipy.stats as sts
+import scipy.linalg as sla
 import numpy as np
 import sklearn.decomposition as skd
 import sklearn.svm as skc
@@ -37,14 +38,16 @@ class Code(object):
 
     def make_encoding_matrix(self, n, stim, power=1, eps=10**-4,
                              pwr_compute=nmd.empirical_variance_power_func,
-                             pwr_scale=nmd.l2_filt_scale):
+                             pwr_scale=nmd.l2_filt_scale, orth_basis=True):
         stim = np.array(stim)
         norm_var = np.var(stim, axis=0)
         mat = sts.multivariate_normal(0, 1).rvs((n, stim.shape[1]))
-        mat_mean = np.expand_dims(np.mean(mat, axis=0), axis=0)
-        mat = mat - mat_mean
-        mat_var = np.expand_dims(np.var(mat, axis=0), axis=0)
-        mat = mat/mat_var
+        if orth_basis:
+            mat = sla.orth(mat)
+        # mat_mean = np.expand_dims(np.mean(mat, axis=0), axis=0)
+        # mat = mat - mat_mean
+        # mat_var = np.expand_dims(np.var(mat, axis=0), axis=0)
+        # mat = mat/mat_var
         enc_stim = np.dot(stim, mat.T)
         emp_pwr = pwr_compute(enc_stim)
         mat = mat*pwr_scale(power, emp_pwr)
@@ -52,12 +55,24 @@ class Code(object):
         assert np.abs(final_power - power) < eps
         return mat
 
+    def get_minimum_distance(self):
+        stim1 = (0,)*self.n_feats
+        stim2 = (1,) + (0,)*(self.n_feats - 1)
+        r1 = self.get_representation(stim1)
+        r2 = self.get_representation(stim2)
+        d = np.sqrt(np.sum((r1 - r2)**2))
+        return d
+    
     def make_representations(self, mat, stim):
         reps = np.dot(stim, mat.T)
         rep_dict = dict(zip(stim, reps))
         return reps, rep_dict
-        
+
+    def get_all_representations(self):
+        return np.array(list(self.rep_dict.values()))
+    
     def get_representation(self, stim, noise=False):
+        stim = np.array(stim)
         if len(stim.shape) == 1:
             stim = np.expand_dims(stim, 0)
         reps = np.array(list(self.rep_dict[self.stim_dict[tuple(s)]]
@@ -118,31 +133,38 @@ class Code(object):
                                                **dec_kwargs)
         return pcorr
 
-    def _sample_noisy_reps(self, rs, n):
+    def _sample_noisy_reps(self, rs, n, add_noise=True):
         r_inds = np.random.choice(rs.shape[0], int(n))
-        r_noisy_reps = self._add_noise(rs[r_inds])
+        if add_noise:
+            r_noisy_reps = self._add_noise(rs[r_inds])
+        else:
+            r_noisy_reps = rs[r_inds]
         return r_noisy_reps
 
-    def _make_decoding_reps(self, c1, c2, n):
+    def _make_decoding_reps(self, c1, c2, n, add_noise=True):
         n_half = int(n/2)
-        c1_train_reps = self._sample_noisy_reps(c1, n_half)
-        c2_train_reps = self._sample_noisy_reps(c2, n_half)
+        c1_train_reps = self._sample_noisy_reps(c1, n_half, add_noise=add_noise)
+        c2_train_reps = self._sample_noisy_reps(c2, n_half, add_noise=add_noise)
         reps = np.concatenate((c1_train_reps, c2_train_reps), axis=0)
         labels = np.concatenate((np.zeros(n_half), np.ones(n_half)))
         return reps, labels
     
-    def decode_rep_classes(self, c1, c2, n_train=10**3, n_test=10**2,
+    def decode_rep_classes(self, c1, c2, n_train=10**3, n_test=10**4,
                            n_reps=10, classifier=skc.SVC, kernel='linear',
-                           c1_test=None, c2_test=None, **classifier_params):
+                           train_noise=True, c1_test=None, c2_test=None,
+                           test_noise=True, **classifier_params):
         pcorr = np.zeros(n_reps)
         for i in range(n_reps):
-            reps_train, labels_train = self._make_decoding_reps(c1, c2, n_train)
+            out = self._make_decoding_reps(c1, c2, n_train,
+                                           add_noise=train_noise)
+            reps_train, labels_train = out
             if c1_test is None:
                 c1_test = c1
             if c2_test is None:
                 c2_test = c2
-            reps_test, labels_test = self._make_decoding_reps(c1_test, c2_test,
-                                                              n_test)
+            out = self._make_decoding_reps(c1_test, c2_test,
+                                           n_test, add_noise=test_noise)
+            reps_test, labels_test = out 
             c = classifier(kernel=kernel, **classifier_params)
             c.fit(reps_train, labels_train)
             pcorr[i] = c.score(reps_test, labels_test)
@@ -157,7 +179,7 @@ class Code(object):
         partitions = np.unique(list(it.permutations(classes)), axis=0)
         return partitions
     
-    def compute_shattering(self, n_reps=10, thresh=.75, **dec_args):
+    def compute_shattering(self, n_reps=5, thresh=.75, **dec_args):
         partitions = self._get_partitions()
         n_parts = int(np.ceil(len(partitions)/2))
         pcorrs = np.zeros((n_parts, n_reps))
@@ -250,7 +272,10 @@ class CompositeCode(Code):
         self.codes = code_list
         super().__init__(n_feats, n_values, n_neurs, power=total_power,
                          noise_cov=noise_cov)
-        assert np.abs(code_pwr(self.rep) - self.power) < self.power*eps
+
+        # print(self.rep.shape)
+        # print(code_pwr(self.rep) - self.power, self.power*eps)
+        # assert np.abs(code_pwr(self.rep) - self.power) < self.power*eps
 
     def make_stimuli(self, n_feats, n_values):
         stim = self.codes[0].stim
