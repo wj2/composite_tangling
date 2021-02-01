@@ -1,5 +1,7 @@
 
 import numpy as np
+import functools as ft
+import multiprocessing as mp
 
 import general.utility as u
 import composite_tangling.code_creation as cc
@@ -167,66 +169,104 @@ def get_code_properties(code, pair1, pair2):
     # print(tp_svm)
     return dev, dev_h, y, sp, x, svs, ints, theta_svm, t_svm
 
+def _compute_metrics(codes, n_feats, n_values, n_neurs, trade,
+                     compute_shattering=True, compute_discrim=True,
+                     compute_mse=True, trade_reps=10, total_power=10,
+                     noise_cov=1, **compute_kwargs):
+    code_props = [trade, 1 - trade]
+    total_dist = np.zeros(trade_reps)
+    indiv_dists = np.zeros((trade_reps, len(codes)))
+    shatt = None
+    max_d = None
+    p_perfs = None
+    discrim_errs = None
+    mse_errs = None
+    for j in range(trade_reps):
+        c = cc.CompositeCode(codes, code_props, n_feats, n_values, n_neurs,
+                             total_power=total_power, noise_cov=noise_cov)
+        total_dist[j] = c.get_minimum_distance()
+        indiv_dists[j] = list(ci.get_minimum_distance() for ci in c.codes)
+        if compute_shattering:
+            sd = c.compute_shattering(**compute_kwargs)
+            max_d = sd[1]
+            p_scores = sd[2]
+            if j == 0:
+                p_perfs = np.zeros((trade_reps,)
+                                   + p_scores.shape)
+                shatt = np.zeros((trade_reps,)
+                                 + sd[0].shape)
+            p_perfs[j] = p_scores
+            shatt[j] = sd[0]
+
+        if compute_discrim:
+            discrim_err = c.compute_discrim()
+            if j == 0:
+                discrim_errs = np.zeros((trade_reps,)
+                                        + discrim_err.shape)
+            discrim_errs[j] = discrim_err
+
+        if compute_mse:
+            mse_err = c.compute_mse()
+            if j== 0:
+                mse_errs = np.zeros((trade_reps,)
+                                    + mse_err.shape)
+            mse_errs[j] = mse_err
+
+        ccgp = c.compute_ccgp(**compute_kwargs)
+        if j == 0:
+            ccgps = np.zeros((trade_reps,) + ccgp.shape)
+        ccgps[j] = ccgp
+    out = (ccgps, total_dist, indiv_dists, shatt, max_d, p_perfs, discrim_errs,
+           mse_errs)
+    return out
+        
+def _merge_parallel_output(out, compute_shattering, compute_discrim,
+                           compute_mse):
+    ccgps = []
+    total_dist = []
+    indiv_dists = []
+    p_perfs = []
+    discrim_errs = []
+    mse_errs = []
+    for o in out:
+        ccgp, td, id_, shatt, max_d, p_perf, discrim_err, mse_err = o
+        ccgps.append(ccgp)
+        total_dist.append(td)
+        indiv_dists.append(id_)
+        p_perfs.append(p_perf)
+        discrim_errs.append(discrim_err)
+        mse_errs.append(mse_err)
+    metrics = {'ccgp':np.array(ccgps)}
+    info = {'min_dist_full':np.array(total_dist),
+            'min_dist_code':np.array(indiv_dists)}
+    if compute_shattering:
+        metrics.update((('shattering',np.array(p_perfs)),))
+        info.update((('shatt', shatt), ('max_d', max_d)))
+    if compute_discrim:
+        metrics.update((('discrim',np.array(discrim_errs)),))
+    if compute_mse:
+        metrics.update((('mse',np.array(mse_errs)),))
+    return metrics, info
+
 def get_ccgp_dim_tradeoff(snr, n_trades, n_feats, n_values, n_neurs, eps=10**-2,
                           noise_var=1, codes=None, compute_shattering=True,
                           compute_discrim=True, compute_mse=True, trade_reps=10,
                           **compute_kwargs):
-    if compute_shattering:
-        shatt = np.zeros((n_trades, trade_reps))
-    else:
-        shatt = None
-        max_d = None
-        p_perfs = None
     pwr = noise_var*snr**2
     if codes is None:
         codes = [cc.LinearCode, cc.DiscreteMixedCode]
     trades = np.linspace(eps, 1 - eps, n_trades)
     total_dist = np.zeros((len(trades), trade_reps))
     indiv_dists = np.zeros(trades.shape + (trade_reps, len(codes),))
-    for i, t in enumerate(trades):
-        code_props = [t, 1 - t]
-        for j in range(trade_reps):
-            c = cc.CompositeCode(codes, code_props, n_feats, n_values, n_neurs,
-                                 total_power=pwr, noise_cov=noise_var)
-            total_dist[i, j] = c.get_minimum_distance()
-            indiv_dists[i, j] = list(ci.get_minimum_distance()
-                                     for ci in c.codes)
-            if compute_shattering:
-                sd = c.compute_shattering(**compute_kwargs)
-                shatt[i, j] = sd[0]
-                max_d = sd[1]
-                p_scores = sd[2]
-                if i == 0 and j == 0:
-                    p_perfs = np.zeros((len(trades), trade_reps)
-                                       + p_scores.shape)
-                p_perfs[i, j] = p_scores
 
-            if compute_discrim:
-                discrim_err = c.compute_discrim()
-                if i == 0 and j== 0:
-                    discrim_errs = np.zeros((len(trades), trade_reps)
-                                            + discrim_err.shape)
-                discrim_errs[i, j] = discrim_err
-
-            if compute_mse:
-                mse_err = c.compute_mse()
-                if i == 0 and j== 0:
-                    mse_errs = np.zeros((len(trades), trade_reps)
-                                        + mse_err.shape)
-                mse_errs[i, j] = mse_err
-
-            ccgp = c.compute_ccgp(**compute_kwargs)
-            if i == 0 and j == 0:
-                ccgps = np.zeros((len(trades), trade_reps) + ccgp.shape)
-            ccgps[i, j] = ccgp
-    metrics = {'ccgp':ccgps}
-    info = {'min_dist_full':total_dist, 'min_dist_code':indiv_dists}
-    if compute_shattering:
-        metrics.update((('shattering',p_perfs),))
-        info.update((('shatt', shatt), ('max_d', max_d)))
-    if compute_discrim:
-        metrics.update((('discrim',discrim_errs),))
-    if compute_mse:
-        metrics.update((('mse',mse_errs),))
+    cm = ft.partial(_compute_metrics, codes, n_feats, n_values, n_neurs,
+                    total_power=pwr, noise_cov=noise_var,
+                    compute_mse=compute_mse, trade_reps=trade_reps,
+                    compute_shattering=compute_shattering,
+                    compute_discrim=compute_discrim, **compute_kwargs)
+    with mp.Pool() as p:
+        out = p.map(cm, trades)
+    metrics, info = _merge_parallel_output(out, compute_shattering,
+                                           compute_discrim, compute_mse)
     return trades, metrics, info
     
