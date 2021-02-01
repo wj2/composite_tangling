@@ -49,26 +49,11 @@ if __name__ == '__main__':
     compute_kwargs = {'compute_shattering':args.no_shattering,
                       'compute_discrim':args.no_discrim,
                       'compute_mse':args.no_mse}
-
-    arg_combs = it.product(snrs, n_feats, n_values, n_neurs)
-    full_dict = {}
-    for (snr, n_feat, n_val, n_neur) in arg_combs:
-        out = ca.get_ccgp_dim_tradeoff(snr, n_trades, n_feat, n_val,
-                                       n_neur, trade_reps=trade_reps,
-                                       n_reps=n_reps, train_noise=tn,
-                                       noise_var=noise_var, eps=eps,
-                                       **compute_kwargs)
-        trades, metrics, info = out
-        ids = info['min_dist_code']
-        p_l, p_n = ca.get_lin_nonlin_pwr([snr], trades, noise_var=noise_var)
-        
-        errs, t1, t2 = ca.ccgp_error_rate(ids[:, 0, 0], ids[:, 0, 1], p_l, p_n,
-                                          noise_var, n_neur, n=10000)
-        shatt_err = ca.partition_error_rate(p_n, noise_var, n_val**n_feat)
-
-        theor = {'ccgp':1 - errs, 'shattering':1 - shatt_err}
-
-        out_dict = dict(metrics=metrics, info=info, theory=theor)
-        full_dict[(snr, n_feat, n_val)] = out_dict
+    trades, full_dict = ca.get_multiple_tradeoffs(snrs, n_trades, n_feats,
+                                                  n_values, n_neurs,
+                                                  trade_reps=trade_reps,
+                                                  n_reps=n_reps, eps=eps,
+                                                  train_noise=tn,
+                                                  **compute_kwargs)
     
     pickle.dump((args, trades, full_dict), open(args.output_path, 'wb'))

@@ -2,6 +2,7 @@
 import numpy as np
 import functools as ft
 import multiprocessing as mp
+import itertools as it
 
 import general.utility as u
 import composite_tangling.code_creation as cc
@@ -270,3 +271,27 @@ def get_ccgp_dim_tradeoff(snr, n_trades, n_feats, n_values, n_neurs, eps=10**-2,
                                            compute_discrim, compute_mse)
     return trades, metrics, info
     
+def get_multiple_tradeoffs(snrs, n_trades, n_feats, n_values, n_neurs,
+                           trade_reps=10, n_reps=2, eps=0, train_noise=False,
+                           noise_var=1, **compute_kwargs):
+    arg_combs = it.product(snrs, n_feats, n_values, n_neurs)
+    full_dict = {}
+    for (snr, n_feat, n_val, n_neur) in arg_combs:
+        out = get_ccgp_dim_tradeoff(snr, n_trades, n_feat, n_val,
+                                    n_neur, trade_reps=trade_reps,
+                                    n_reps=n_reps, train_noise=train_noise,
+                                    noise_var=noise_var, eps=eps,
+                                    **compute_kwargs)
+        trades, metrics, info = out
+        ids = info['min_dist_code']
+        p_l, p_n = get_lin_nonlin_pwr([snr], trades, noise_var=noise_var)
+        
+        errs, t1, t2 = ccgp_error_rate(ids[:, 0, 0], ids[:, 0, 1], p_l, p_n,
+                                       noise_var, n_neur, n=10000)
+        shatt_err = partition_error_rate(p_n, noise_var, n_val**n_feat)
+
+        theor = {'ccgp':1 - errs, 'shattering':1 - shatt_err}
+
+        out_dict = dict(metrics=metrics, info=info, theory=theor)
+        full_dict[(snr, n_feat, n_val)] = out_dict
+    return trades, full_dict
