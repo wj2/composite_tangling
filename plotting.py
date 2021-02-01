@@ -27,7 +27,7 @@ def plot_metrics(x_vals, metrics, x_label, y_labels=None, axs=None, fwid=3,
         
         v_theor = theory.get(k)
         if v_theor is not None:
-            gpl.plot_trace_werr(x_vals, v_theor, ax=ax)
+            gpl.plot_trace_werr(x_vals, v_theor, linestyle='dashed', ax=ax)
         ax.set_title(k)
         ax.set_xlabel(x_label)
         if y_labels is not None:
