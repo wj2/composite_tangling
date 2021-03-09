@@ -3,6 +3,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import general.plotting as gpl
+from mpl_toolkits.mplot3d import Axes3D
 
 def plot_metrics(x_vals, metrics, x_label, y_labels=None, axs=None, fwid=3,
                  theory=None, eps=.1,  **kwargs):
@@ -36,3 +37,9 @@ def plot_metrics(x_vals, metrics, x_label, y_labels=None, axs=None, fwid=3,
         if np.diff(yl) < eps:
             ax.set_ylim(yl[0] - eps, yl[1] + eps)
     return axs
+
+def plot_schematic(ax=None):
+    if ax is None:
+        f, ax = plt.subplots(1, 1, projection='3d')
+
+    ax.plot([0, 1], [0, 0], [0, 0])

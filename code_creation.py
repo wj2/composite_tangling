@@ -5,6 +5,7 @@ import scipy.linalg as sla
 import numpy as np
 import sklearn.decomposition as skd
 import sklearn.svm as skc
+import scipy.special as ss
 
 import mixedselectivity_theory.nms_discrete as nmd
 
@@ -19,7 +20,10 @@ def mse(xs, ys):
 class Code(object):
 
     def __init__(self, n_feats, n_values, n_neurs, power=1, noise_cov=1,
+                 pwr_func=nmd.empirical_variance_power_func, use_radius=False,
                  **stim_kwargs):
+        if use_radius:
+            pwr_func = nmd.empirical_radius_power_func
         self.n_feats = n_feats
         self.n_neurs = n_neurs
         self.n_values = n_values
@@ -31,7 +35,8 @@ class Code(object):
         self.noise_distr = sts.multivariate_normal(np.zeros(n_neurs), noise_cov)
         self.snr = np.sqrt(power/noise_cov)
         self.encoding_matrix = self.make_encoding_matrix(n_neurs, self.stim_proc,
-                                                         power=power)
+                                                         power=power,
+                                                         pwr_compute=pwr_func)
         out = self.make_representations(self.encoding_matrix, self.stim_proc)
         self.rep, self.rep_dict = out
         self.inv_rep_dict = {tuple(v):tuple(k) for k, v in self.rep_dict.items()}
@@ -117,6 +122,11 @@ class Code(object):
                 c2_test_stim = c2_test_stim[c2_exclusion]
                 c2_test_rep = self.get_representation(c2_test_stim)
 
+                print(c1_eg_stim) 
+                print(c1_test_stim)
+
+                print(c2_eg_stim)
+                print(c2_test_stim)
                 train_sets.append((c1_eg_rep, c2_eg_rep))
                 test_sets.append((c1_test_rep, c2_test_rep))
         return train_sets, test_sets                
@@ -170,22 +180,31 @@ class Code(object):
             pcorr[i] = c.score(reps_test, labels_test)
         return pcorr
 
-    def _get_partitions(self):
+    def _get_partitions(self, random_thr=100, sample=None):
+        if sample is None:
+            sample = random_thr
         class_size = int(np.floor(self.n_stimuli/2))
-        classes = (0,)*class_size + (1,)*class_size
-        if class_size*2 < self.n_stimuli:
-            classes = classes + (-1,)
-        # this will become slow for large permutation sets
-        partitions = np.unique(list(it.permutations(classes)), axis=0)
-        return partitions
+        if ss.comb(self.n_stimuli, class_size) > random_thr:
+            partitions = list(np.random.choice(self.n_stimuli,
+                                               class_size,
+                                               replace=False)
+                              for x in range(sample))
+        else:
+            combs = it.combinations(range(self.n_stimuli), class_size)
+            partitions = list(combs)
+            n_parts = int(np.ceil(len(partitions)/2))
+            partitions = partitions[:n_parts]
+        return np.array(partitions)
     
     def compute_shattering(self, n_reps=5, thresh=.75, **dec_args):
         partitions = self._get_partitions()
-        n_parts = int(np.ceil(len(partitions)/2))
+        n_parts = len(partitions)
         pcorrs = np.zeros((n_parts, n_reps))
-        for i, ps in enumerate(partitions[:n_parts]):
-            c1 = self.rep[ps == 0]
-            c2 = self.rep[ps == 1]
+        rep_arr = np.array(self.rep)
+        for i, ps1 in enumerate(partitions):
+            ps2 = list(set(range(self.n_stimuli)).difference(ps1))
+            c1 = rep_arr[ps1]
+            c2 = rep_arr[ps2]
             pcorrs[i] = self.decode_rep_classes(c1, c2, n_reps=n_reps,
                                                 **dec_args)
         n_c = np.sum(np.mean(pcorrs, axis=1) > thresh)
@@ -272,10 +291,6 @@ class CompositeCode(Code):
         self.codes = code_list
         super().__init__(n_feats, n_values, n_neurs, power=total_power,
                          noise_cov=noise_cov)
-
-        # print(self.rep.shape)
-        # print(code_pwr(self.rep) - self.power, self.power*eps)
-        # assert np.abs(code_pwr(self.rep) - self.power) < self.power*eps
 
     def make_stimuli(self, n_feats, n_values):
         stim = self.codes[0].stim
