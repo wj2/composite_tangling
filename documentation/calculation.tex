@@ -1,0 +1,304 @@
+\documentclass[letter,12pt]{article}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{autonum}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{caption}
+\usepackage{tikz}
+\usepackage{siunitx}
+\usepackage{titletoc}
+\usepackage{authblk}
+\usepackage{lineno}
+\usepackage{etoolbox}
+\cslet{blx@noerroretextools}\empty
+\usepackage[style=nature]{biblatex}
+\linenumbers
+
+
+\newcommand*\patchAmsMathEnvironmentForLineno[1]{%
+  \expandafter\let\csname old#1\expandafter\endcsname\csname #1\endcsname
+  \expandafter\let\csname oldend#1\expandafter\endcsname\csname end#1\endcsname
+  \renewenvironment{#1}%
+                   {\linenomath\csname old#1\endcsname}%
+                   {\csname oldend#1\endcsname\endlinenomath}}% 
+\newcommand*\patchBothAmsMathEnvironmentsForLineno[1]{%
+  \patchAmsMathEnvironmentForLineno{#1}%
+}%
+\AtBeginDocument{%
+  \patchBothAmsMathEnvironmentsForLineno{equation}%
+  \patchBothAmsMathEnvironmentsForLineno{align}%
+  \patchBothAmsMathEnvironmentsForLineno{flalign}%
+  \patchBothAmsMathEnvironmentsForLineno{alignat}%
+  \patchBothAmsMathEnvironmentsForLineno{gather}%
+  \patchBothAmsMathEnvironmentsForLineno{multline}%
+}
+
+
+%% \title{Solutions to the representation assignment problem balance a
+%%   trade-off between local and catastrophic errors}
+%% \author[1,2,*]{\small W. Jeffrey Johnston}
+%% \author[1,2]{\small David J. Freedman}
+
+%% \affil[1]{\footnotesize Graduate Program in Computational Neuroscience}
+%% \affil[2]{\footnotesize Department of Neurobiology}
+%% \affil[ ]{\small The University of Chicago, Chicago, IL, USA}
+%% \affil[*]{\footnotesize Corresponding author:
+%%   \href{mailto:wjeffreyjohnston@gmail.com}{wjeffreyjohnston@gmail.com}}
+
+\addbibresource{/Users/wjj/Dropbox/research/uc/freedman/papers/papers.bib}
+
+\newcommand*{\nref}[2]{% 
+  \hyperref[{#2}]{\emph{\nameref*{#2}} in \emph{\nameref*{#1}}}}
+\newcommand*{\kref}[2]{%
+  \cref{#1}#2}
+\crefformat{equation}{Eq.~#2#1#3}
+\crefformat{figure}{Figure~#2#1#3}
+
+\newtheorem{statement}{Statement}
+\renewcommand*{\proofname}{Derivation}
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\sign}{sgn}
+
+\newcommand{\dll}{d_{LL}}
+\newcommand{\dlg}{d_{LG}}
+\newcommand{\dla}{d_{LA}}
+\newcommand{\dn}{d_{N}}
+\newcommand{\dis}{\mathcal{N}(0, 1/D)}
+\newcommand{\fno}{f_{2N}^{\text{opt}}}
+
+% \doublespacing
+
+\begin{document}
+\captionsetup[figure]{labelfont=bf,textfont=normalfont,
+  singlelinecheck=off,justification=raggedright,font=footnotesize}
+\pagenumbering{gobble}
+\setlength{\extrarowheight}{5pt}
+
+%% \maketitle
+
+\section{The tradeoff between flexibility and generalization for discrete codes}
+
+\subsection{Approximating code flexibility}
+We consider a code for a discrete set of stimuli to be flexible if arbitrary
+binary partitions of that set can be read out with a linear decoder. When a code
+has a mixture of linear and nonlinear stimulus representations, some partitions
+are orthogonal to the linear structure in the representation and can be
+implemented only if the nonlinear components of the representation are strong
+enough -- one such partition is the parity or XOR partition. Thus, to approximate
+code flexibility, we will focus on this case. It allows us to ignore any
+contribution to the representation from the linear code and focus only on the
+nonlinear code.
+
+In the nonlinear code for $n^{K} = N_{s}$ stimuli, all of the stimuli are
+$\sqrt{P_{N}}$ from the origin in representation space and $\sqrt{2P_{N}}$ from
+each other. In this case, the vector corresponding to the optimal hyperplane for
+a linear decoder that
+implements an arbitrary partition of such stimuli has a constant magnitude
+$c$ in the direction of all stimuli -- and the magnitude is positive for
+stimuli in one category and negative for stimuli in the other category. Using
+this understanding, we can calculate the performance of the linear decoder where
+$r$ is the decoding vector, $x$ is particular stimulus representation in the
+positive category, and $\sigma^{2}$ is the variance of normally distributed output
+noise for the neurons in the code:
+\begin{align}
+  E_{f} &= P(r \dot x > 0) \\
+  &= P(\mathcal{N}(\sqrt{P_{N}}, N_{s} \sigma^{2}) > 0) \\
+  &= Q\left(-\frac{\sqrt{P_{N}}}{\sqrt{N_{s}\sigma^{2}}}\right) \\
+  &= Q\left(-\frac{\sqrt{P_{N}}}{n^{K/2} \sigma}\right) \\
+\end{align}
+where $Q$ is the cumulative distribution function of the standard normal
+distribution.
+
+\subsection{Approximating code generalization}
+We consider a code to have good generalization performance when a linear decoder
+aligned with some combination of code features that is learned on one part of the
+stimulus space provides good performance on another part of the stimulus space.
+In a simple case with two stimulus features that each take on two values, this
+means that a linear decoder that discriminates the value of the second feature
+(0 or 1) learned for a fixed value of the first feature (say, 0) will generalize
+with minimal loss of performance to other values of the first feature (in this
+case, 1). This notion of generalization performance is referred to as
+cross-condition generalization performance (CCGP).
+
+We set out to approximate CCGP for two sets of two stimulus representations
+each. Here, we consider a linear code that is distorted by a nonlinear code.
+Thus, we can consider distances in the purely linear code and distances in the
+purely nonlinear code separately.
+
+\subsubsection{Preliminaries}
+First, we find how the distance between
+adjacent stimuli in the linear code depends on the number of features $K$ and
+the number of values that each feature takes on $n$ along with the linear power
+of the code ($P_{L}$),
+\begin{align}
+d_{L} &= \sqrt{\frac{12 P_{L}}{K (n^2 - 1)}}
+\end{align}
+This distance can be used as a scaling factor that allows translation between
+distance in stimulus space and distance in representation space -- that is,
+if two stimuli have distance $l$ in stimulus space, then they have distance
+$l d_{L}$ in representation space. However, this assumes that each feature is
+encoded with the same fidelity, which may not always be true.
+
+Second, we find that the nonlinear distance is,
+\begin{align}
+  d_{N} &= \sqrt{2 P_{N}}
+\end{align}
+Further, we can also observe that each representation in the linear code
+undergoes a distortion of magnitude $P_{N}$ in a random direction.
+
+Third, we remind ourselves that the dot product of two random unit vectors
+$u_{1} \cdot u_{2}$ in a $D$-dimensional space follows the distribution
+\begin{align}
+  u_{1} \cdot u_{2} &\sim \dis
+\end{align}
+for large $D$.
+
+\subsubsection{Main derivation}
+We use $\dll$ to denote the distance in the linear code between the two
+stimulus representations used to learn the classification and $\dlg$ to
+denote the distance between the two stimulus representations that are generalized
+to. This distance is along the same unit vector $f_{1}$. We use $\dla$ to
+denote the distance between the two pairs of stimuli along the axis that they are
+to be generalized over, which we denote as the unit vector $f_{2}$. Each of the
+four stimuli also undergoes a distortion of magnitude $\sqrt{P_{N}}$ due to the
+nonlinear code, we denote the direction of these four distortions as the unit
+vectors $n_{i}$ for $i \in [1, 2, 3, 4]$. They are chosen such that
+$n_{i} \cdot n_{j} = 0$ for $i \ne j$ -- however, $n_{i} \cdot f_{j}$ is not
+constrained to be zero. From above, we know that
+$n_{i} \cdot f_{j} \sim \dis$ where $D$ is the
+full dimensionality of the space (i.e., the number of neurons in the code).
+Additionally, for convenience, we also use $n_{ij}$ for any number of indices
+to refer to the following
+\begin{align}
+  n_{ij} &= \frac{n_{i} + n_{j}}{\sqrt{2}}
+\end{align}
+and similarly for more indices, so that the end vector is a unit vector.
+
+For simplicity, we assume that $\dll = \dlg$, but this can be relaxed later. 
+
+First, we find the center points between our two pairs of stimuli in the full
+code with reference to the ``bottom left'' stimulus, $s_{2}$. In particular,
+$s_{1} = f_{1} \dll + \dn n_{12}$, $s_{2} = 0$,
+$s_{3} = \dll f_{1} + \dla f_{2} + \dn n_{23}$,
+and $s_{4} = \dla f_{2} + \dn n_{24}$. Thus, 
+\begin{align}
+  \hat{s}_{12} &= \frac{1}{2}\left(\dll f_{1} + \dn n_{12}\right) \\
+  \hat{s}_{34} &= \frac{1}{2}\left(\dll f_{1} + 2\dll f_{2} + \dn n_{23}
+  + \dn n_{24}\right)
+\end{align}
+
+Next, we find the axes of the disorted space in the full code. The vector between
+$s_{1}$ and $s_{2}$ is the distorted version of $f_{1}$, and is given by
+\begin{align}
+  f_{1N} &= \frac{1}{c}\left(\dll + d_{n}n_{12}\right)
+\end{align}
+where $c$ is a random variable representing the distance between the two stimulus
+representations in the full code,
+\begin{align}
+  c &= \sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn f_{1} \cdot n_{12}} \\
+  &= \sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn \dis} 
+\end{align}
+
+Now, we find the optimal $f_{2}$ in the disorted code, which is also the category
+boundary that would be learned by a decoder trained with both stimulus
+representation pairs. This is given by,
+\begin{align}
+  f_{2N}^{\text{opt}} &= \hat{s}_{34} - \hat{s}_{12} \\
+  &= \frac{1}{a}\left(\dla f_{2} + \frac{\sqrt{2}}{2} \dn n_{1234}\right)
+\end{align}
+where $a$ is a random variable given by
+\begin{align}
+  a &= \sqrt{\dla^{2} + \frac{1}{2}\dn^{2} \sqrt{2}\dn \dll \dis}
+\end{align}
+which is the distance between the centers of the two sets of points.
+
+The decoding hyperplane used by a decoder trained on only the first set of
+stimulus representations is given by the unit vector orthogonal to it, which is
+simply $f_{1N}$. If $f_{1N} \cdot f_{2N} = 0$, then the decoding hyperplane
+includes $f_{2N}^{\text{opt}}$ and generalization performance will be as good as
+possible. Thus, we can approximate CCGP by studying the dot product of these
+two vectors. The dot product can be written as,
+\begin{align}
+  b &= f_{2N}^{\text{opt}} \cdot f_{1N} \\
+  &= \frac{1}{ac} \sqrt{\frac{3}{2}} \dn \dla \dis
+\end{align}
+Geometrically, $b \frac{c}{2}$ is the distance along $\fno$ that $s_{1}$ and
+$s_{2}$ are from the center point $\hat{s}_{12}$. Here, we have two sides of a
+right triangle, the hypotenuse has length $c/2$ and the other with length
+$b \frac{c}{2}$. We use these to find the angle between the learned hyperplane
+and the optimal hyperplane,
+\begin{align}
+  \theta &= \frac{\pi}{2} - \arccos\left(\frac{2b}{c}\right) \\
+  &= \arcsin\left(\frac{2b}{c}\right)
+\end{align}
+In most cases, the larger $\theta$, the worse generalization performance will
+be.
+
+We can also directly approximate CCGP. 
+
+
+
+
+
+
+
+
+To do this, we need to find the position
+of $s_{3}$ and $s_{4}$ along the decoding vector defined by $f_{1N}$, and then
+we evaluate whether that magnitude is greater or smaller than the threshold
+$c/2$. So, to find this distance relative to the threshold, we need $d$ such
+that
+\begin{align}
+  d_{3} &= f_{1N} \cdot s_{3} - \frac{c}{2} \\
+  &= \frac{1}{c}\left(\dll f_{1} + \dn n_{12}\right)
+  \left(\dll f_{1} + \dla f_{2} + \dn n_{23}\right) - \frac{c}{2} 
+\end{align}
+First, we focus on the first term and drop $c$ for now,
+\begin{align}
+  t_{1} &= \left(\dll f_{1} + \dn n_{12}\right)
+  \left(\dll f_{1} + \dla f_{2} + \dn n_{23}\right) \\
+  &= \dll^{2} + \dll \dn f_{1} n_{23} + \dll \dn f_{1} n_{12}
+  + \dla \dn f_{2} n_{12} + \dn^{2} n_{23} n_{12} \\
+  &= \dll^{2} + \frac{1}{2}\dn^{2}
+  + \frac{\dll \dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}
+  + f_{1}n_{2} + f_{1}n_{3}\right) + \dla \dn n_{12}f_{2} 
+\end{align}
+Next, we bring back the full expression and multiply everything by $c$,
+\begin{align}
+  c d_{3} &= \dll^{2} + \frac{1}{2}\dn^{2}
+  + \frac{\dll \dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}
+  + f_{1}n_{2} + f_{1}n_{3}\right) + \dla \dn n_{12}f_{2}
+  - \frac{c^{2}}{2} \\
+  &= \dll^{2} + \frac{1}{2}\dn^{2}
+  + \frac{\dll \dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}
+  + f_{1}n_{2} + f_{1}n_{3}\right) + \dla \dn n_{12}f_{2}
+  \\ &- \frac{1}{2}\dll^{2} - \frac{1}{2} \dn^{2}
+  - \frac{\dll\dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}\right) \\
+  &= \frac{1}{2}\dll + \dll\dn f_{1}n_{23} + \dla\dn f_{2}n_{12} \\
+  d &= \frac{\frac{1}{2}\dll + \dll\dn f_{1}n_{23} + \dla\dn f_{2}n_{12}}
+  {\sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn f_{1}n_{12}}}
+\end{align}
+
+
+
+
+\begin{align}
+  a_{3,4} &= a \pm \frac{\sqrt{2}}{2a}\dn \left(\frac{1}{2}\dla \dis
+  + \dll \dis\right)
+\end{align}
+where the second term captures the distortion relative to the mean distance
+between the two stimuli. Then, we can find the distance of $s_{i}$ for $i \in
+[3, 4]$ from the learned decoding hyperplane by finding
+\begin{align}
+  d_{3} &= f_{1N} s_{3} - \frac{c}{2}
+\end{align}
+
+\end{document}
