@@ -37,66 +37,65 @@ def get_lin_nonlin_pwr(snrs, trades, noise_var=1):
     nonlin_pwrs = (1 - trades)*pwrs
     return lin_pwrs, nonlin_pwrs
 
-def get_n_equal_partitions(n):
-    if n % 2 > 0:
-        n = n - 1
-    num = ss.factorial(n)
-    denom = 2*ss.factorial(n/2)**2
-    return num/denom
-
-def nonlin_class_performance(p_n, n_s, noise_var=1):
-    n_c = get_n_equal_partitions(n_s)
-    p_class = sts.norm().cdf(np.sqrt(p_n/noise_var))**n_s1
-    return p_class
-
 def partition_error_rate(p, noise_var, n_s):
     pe = sts.norm(0, 1).cdf(-np.sqrt(p/(n_s*noise_var)))
     return pe
 
 def ang_to_err(xy, b, c, noise_var):
-    t = xy*np.sin(np.pi/2 - np.arctan2(b, c))
+    t = xy*np.sin(np.pi/2 - np.arctan(b, c))
     errs = sts.norm(0, 1).cdf(t/np.sqrt(noise_var))
     return errs, t
 
-def ccgp_error_rate(d_lin, d_nl, p_l, p_n, noise_var, n_neurs, n=5000):
-    pn = (d_nl**2)/(n_neurs)
-    lg = d_lin
-    lc = d_lin
-    lc2 = d_lin
-
+def ccgp_pair_error_rate(d_nl, lg, lc1, lc2, noise_var, n_neurs, n=5000):
     dot_distr = sts.multivariate_normal(np.zeros_like(lg), 1/n_neurs,
+                                        allow_singular=True)
+    dot_distr = sts.multivariate_normal(np.zeros_like(lg), 0,
                                         allow_singular=True)
 
     a = np.sqrt(lg**2 + .5*d_nl**2 + np.sqrt(2)*d_nl*lg*dot_distr.rvs(n))
 
-    """ untested; works all right with just a """
     ai_ft = np.sqrt(2)*lg*d_nl*dot_distr.rvs(n)/4
     ai_st = np.sqrt(2)*lc2*d_nl*dot_distr.rvs(n)/2
     a1 = (ai_ft + ai_st)/a + a
     a2 = -(ai_ft + ai_st)/a + a
     
     b = np.sqrt(3/2)*lg*d_nl*dot_distr.rvs(n)/(2*a)
+    b2 = np.sqrt(3/2)*lg*d_nl*dot_distr.rvs(n)/(2*a)
 
-    c = np.sqrt(lc**2 + d_nl**2 + np.sqrt(2)*lc*d_nl*dot_distr.rvs(n))
-    x1 = a1*b/c
-    x2 = a2*b/c
+    c = np.sqrt(lc1**2 + d_nl**2 + 2*lc1*d_nl*dot_distr.rvs(n))
+    c2 = np.sqrt(lc2**2 + d_nl**2 + 2*lc2*d_nl*dot_distr.rvs(n))
+    x1 = 2*a1*b/(c*np.sqrt(1 - (2*b/c)**2))
+    x2 = 2*a2*b/(c*np.sqrt(1 - (2*b/c)**2))
+    # x2 = a2*b/c
 
-    d = (lc**2 + np.sqrt(2)*lc*d_nl*dot_distr.rvs(n))/c
-    d1 = d/2
-    d2 = -d/2
-
-    e_both = 0 
-    
-    y1 = d1 - e_both
-    y2 = d2 - e_both
+    # d = (lc1**2 + (lc1*d_nl + lc2*d_nl)*dot_distr.rvs(n))/c
+    d = (.5*lc1**2 + np.sqrt(2)*lc2*d_nl*dot_distr.rvs(n))/c
+    # print((c2/2)**2, b2**2)
+    # print((c2/2)**2 -  b2**2)
+    y1 = np.sqrt((c2/2)**2 - b2**2)
+    y2 = -np.sqrt((c2/2)**2 - b2**2)
+    print(y1, d/2)
+    y1 = d/2
+    y2 = -d/2
     
     xy1 = x1 - y1
     xy2 = x2 - y2
 
     err1, t1 = ang_to_err(xy1, b, c, noise_var)
     err2, t2 = ang_to_err(xy2, b, c, noise_var)
+    err1 = sts.norm(0, 1).cdf((-d - c/2)/np.sqrt(noise_var))
+    err2 = sts.norm(0, 1).cdf((d - c/2)/np.sqrt(noise_var))
     err = np.mean((err1 + 1 - err2)/2, axis=0)
-    return err, t1, t2
+    return err, t1, t2    
+
+def ccgp_error_rate(p_l, p_n, n_feats, n_values, noise_var, n_neurs, n=5000):
+    d_nl = get_mixed_theory_distance(p_n, n_feats, n_values)[0]
+    d_lin = get_linear_theory_distance(p_l, n_feats, n_values)[0]
+    lg = d_lin
+    lc1 = d_lin
+    lc2 = d_lin
+    # for 
+    return ccgp_pair_error_rate(d_nl, lg, lc1, lc2, noise_var, n_neurs, n=n)
 
 def get_code_properties(code, pair1, pair2):
     dmc, lc = code.codes
@@ -105,6 +104,8 @@ def get_code_properties(code, pair1, pair2):
     pl2 = lc.get_representation(pair2) - pl1[0]
     f1 = code.get_representation(pair1) - pl1[0]
     f2 = code.get_representation(pair2) - pl1[0]
+
+    c_pr = np.sqrt(np.sum((f1[0] - f1[1])**2))
 
     c_f = svm.SVC(kernel='linear', C=1000)
     c_f.fit(f1, [0, 1])
@@ -134,6 +135,7 @@ def get_code_properties(code, pair1, pair2):
     
     theta_svm = u.vector_angle(c_f.coef_[0], cent_ax, degrees=False) - np.pi/2
     t_svm = c_f.decision_function(f2/np.sqrt(np.sum(c_f.coef_**2)))
+    t_svm = t_svm*c_pr
     x = sp[0]*np.tan(theta_svm)
 
     
@@ -168,7 +170,27 @@ def get_code_properties(code, pair1, pair2):
     # theta_svm = u.vector_angle(svs[1], svs[0], degrees=False)
     tp_svm = c_p.decision_function(pl2 - pl1[0])
     # print(tp_svm)
-    return dev, dev_h, y, sp, x, svs, ints, theta_svm, t_svm
+    return c_pr, dev_h, y, sp, x, svs, ints, theta_svm, t_svm
+
+def get_linear_code_distance(*args, **kwargs):
+    return get_code_distance(*args, cc.LinearCode, **kwargs)
+
+def get_mixed_code_distance(*args, **kwargs):
+    return get_code_distance(*args, cc.DiscreteMixedCode, **kwargs)
+
+def get_code_distance(pwrs, n_feats, n_values, code, n_neurs=100, **kwargs):
+    ds = np.zeros(len(pwrs))
+    for i, pwr in enumerate(pwrs):
+        c = code(n_feats, n_values, n_neurs, power=pwr, **kwargs)
+        ds[i] = c.get_minimum_distance()
+    return ds
+
+def get_linear_theory_distance(pwrs, n_feats, n_values, default_d=1):
+    ds = np.sqrt(12*pwrs/(n_feats*(n_values**2 - 1)))
+    return ds
+
+def get_mixed_theory_distance(pwrs, n_feats, n_values):
+    return np.sqrt(2*pwrs)
 
 def _compute_metrics(codes, n_feats, n_values, n_neurs, trade,
                      compute_shattering=True, compute_discrim=True,
@@ -286,7 +308,7 @@ def get_multiple_tradeoffs(snrs, n_trades, n_feats, n_values, n_neurs,
         ids = info['min_dist_code']
         p_l, p_n = get_lin_nonlin_pwr([snr], trades, noise_var=noise_var)
         
-        errs, t1, t2 = ccgp_error_rate(ids[:, 0, 0], ids[:, 0, 1], p_l, p_n,
+        errs, t1, t2 = ccgp_error_rate(p_l, p_n, n_feats, n_values,
                                        noise_var, n_neur, n=10000)
         shatt_err = partition_error_rate(p_n, noise_var, n_val**n_feat)
 
