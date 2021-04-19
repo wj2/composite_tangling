@@ -20,6 +20,62 @@ def plot_script_results(trades, full_dict, ax=None,
         outs.append(out)
     return outs
 
+def plot_optreg(regs, feats, vals, p_lopt, p_nopt, ax=None, fwid=3):
+    if ax is None:
+        f, ax = plt.subplots(1, 1, figsize=(fwid, fwid))
+    pwr_tot = p_lopt + p_nopt
+    reg_inds = np.argmin(pwr_tot, axis=0)
+    reg_opt = np.array(regs)[reg_inds]
+    gpl.pcolormesh(vals, feats, reg_opt, ax, vmin=min(regs), vmax=max(regs))
+    ax.set_xlabel('number of values')
+    ax.set_ylabel('number of features')
+    return ax
+    
+def plot_opt_pwrs(feats, vals, p_lopt, p_nopt, axs=None, fwid=3,
+                  use_log=True):
+    if axs is None:
+        f, (ax_l, ax_n, ax_tot) = plt.subplots(1, 3, figsize=(3*fwid, fwid))
+    feats_ax = gpl.pcolormesh_axes(feats, len(feats))
+    vals_ax = gpl.pcolormesh_axes(vals, len(vals))
+    if use_log:
+        p_lopt = np.log10(1 + p_lopt)
+        p_nopt = np.log10(1 + p_nopt)
+    vmin = min(np.min(p_lopt), np.min(p_nopt))
+    vmax = max(np.max(p_lopt), np.max(p_nopt))
+    ax_l.pcolormesh(vals_ax, feats_ax, p_lopt, vmin=vmin, vmax=vmax)
+    pm = ax_n.pcolormesh(vals_ax, feats_ax, p_nopt, vmin=vmin, vmax=vmax)
+    cb_b = f.colorbar(pm, ax=(ax_l, ax_n))
+    ax_l.set_title('linear power')
+    ax_n.set_title('nonlinear power')
+    vmax_comb = np.max(p_lopt + p_nopt)
+    pm_tot = ax_tot.pcolormesh(vals_ax, feats_ax, p_lopt + p_nopt, vmin=vmin,
+                               vmax=vmax_comb)
+    f.colorbar(pm_tot, ax=ax_tot)
+    ax_n.set_xlabel('number of values')
+    ax_l.set_ylabel('number of features')
+    ax_tot.set_title('total power')[O    
+    return ax_l, ax_n, ax_tot
+
+def plot_phase(trades, feats, vals, gen, shatt, axs_gen=None, axs_shatt=None,
+               fwid=3, comb_thresh=.95):
+    if axs_gen is None:
+        figsize = (3*fwid, len(trades)*fwid)
+        f, axs = plt.subplots(len(trades), 3, figsize=figsize)
+        axs_gen = axs[:, 0]
+        axs_shatt = axs[:, 1]
+        axs_comb = axs[:, 2]
+    for i, t in enumerate(trades):
+        ax_gen = axs_gen[i]
+        ax_shatt = axs_shatt[i]
+        ax_comb = axs_comb[i]
+        feats_ax = gpl.pcolormesh_axes(feats, len(feats))
+        vals_ax = gpl.pcolormesh_axes(vals, len(vals))
+        ax_gen.pcolormesh(vals_ax, feats_ax, gen[i], vmin=.5, vmax=1)
+        ax_shatt.pcolormesh(vals_ax, feats_ax, shatt[i], vmin=.5, vmax=1)
+        comb_map = np.logical_and(gen[i] > comb_thresh, shatt[i] > comb_thresh)
+        ax_comb.pcolormesh(vals_ax, feats_ax, comb_map, vmin=0, vmax=1)
+    return axs_gen, axs_shatt
+
 def plot_metrics(x_vals, metrics, x_label, y_labels=None, axs=None, fwid=3,
                  theory=None, eps=.1, theory_col='k', **kwargs):
     if theory is None:

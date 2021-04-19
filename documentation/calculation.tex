@@ -128,8 +128,9 @@ with minimal loss of performance to other values of the first feature (in this
 case, 1). This notion of generalization performance is referred to as
 cross-condition generalization performance (CCGP).
 
-We set out to approximate CCGP for two sets of two stimulus representations
-each. Here, we consider a linear code that is distorted by a nonlinear code.
+We set out to approximate CCGP with a pair of stimuli used for training and
+a third stimulus that must be generalized to. Here, we consider a linear code
+that is distorted by a nonlinear code.
 Thus, we can consider distances in the purely linear code and distances in the
 purely nonlinear code separately.
 
@@ -144,8 +145,8 @@ d_{L} &= \sqrt{\frac{12 P_{L}}{K (n^2 - 1)}}
 
 \textbf{Linear distance derivation:}
 We approach this by computing the variance (i.e., the linear power $P_{L}$)
-of a $K$-dimensional lattice with $n$ points spaced with distance $d_{L}$ along
-each dimension when the points are sampled with uniform probability. Then, we
+of a uniformly sampled $K$-dimensional lattice with $n$ points spaced at distance
+$d_{L}$ along each dimension. Then, we
 invert the expression for the variance to find an expression for the distance
 between the points. First, we write the variance $P_{L}$ as
 \begin{align}
@@ -204,14 +205,16 @@ for large $D$.
 
 \subsubsection{Main derivation}
 We use $\dll$ to denote the distance in the linear code between the two
-stimulus representations used to learn the classification and $\dlg$ to
-denote the distance between the two stimulus representations that are generalized
-to. This distance is along the same unit vector $f_{1}$. We use $\dla$ to
-denote the distance between the two pairs of stimuli along the axis that they are
+stimulus representations used to learn the classification. This distance is
+along the unit vector $f_{1}$. Further, we use $\dlg$ to denote the distance
+along that unit vector $f_{1}$ of the third stimulus $s_{3}$ which is generalized
+to. We use $\dla$ to
+denote the distance between the pair of stimuli that is used for training and
+the third stimulus along the axis that they are
 to be generalized over, which we denote as the unit vector $f_{2}$. Each of the
-four stimuli also undergoes a distortion of magnitude $\sqrt{P_{N}}$ due to the
-nonlinear code, we denote the direction of these four distortions as the unit
-vectors $n_{i}$ for $i \in [1, 2, 3, 4]$. They are chosen such that
+stimuli also undergoes a distortion of magnitude $\sqrt{P_{N}}$ due to the
+nonlinear code, we denote the direction of these distortions as the unit
+vectors $n_{i}$. They are chosen such that
 $n_{i} \cdot n_{j} = 0$ for $i \ne j$ -- however, $n_{i} \cdot f_{j}$ is not
 constrained to be zero. From above, we know that
 $n_{i} \cdot f_{j} \sim \dis$ where $D$ is the
@@ -243,17 +246,12 @@ and similarly for more indices, so that the end vector is a unit vector.
   \label{schem}
 \end{figure}
 
-For simplicity, we assume that $\dll = \dlg$, but this can be relaxed later. 
-
 First, we find the center points between our two pairs of stimuli in the full
 code with reference to the ``bottom left'' stimulus, $s_{2}$. In particular,
-$s_{1} = f_{1} \dll + \dn n_{12}$, $s_{2} = 0$,
-$s_{3} = \dll f_{1} + \dla f_{2} + \dn n_{23}$,
-and $s_{4} = \dla f_{2} + \dn n_{24}$. Thus, 
+$s_{1} = f_{1} \dll + \dn n_{12}$, $s_{2} = 0$, and
+$s_{3} = \dlg f_{1} + \dla f_{2} + \dn n_{23}$. Thus, 
 \begin{align}
-  \hat{s}_{12} &= \frac{1}{2}\left(\dll f_{1} + \dn n_{12}\right) \\
-  \hat{s}_{34} &= \frac{1}{2}\left(\dll f_{1} + 2\dll f_{2} + \dn n_{23}
-  + \dn n_{24}\right)
+  \hat{s}_{12} &= \frac{1}{2}\left(\dll f_{1} + \dn n_{12}\right)
 \end{align}
 
 Next, we find the vector pointing between the two representations used for
@@ -269,64 +267,80 @@ vector, and corresponds to the distance between $s_{1}$ and $s_{2}$,
   &= \sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn \dis} 
 \end{align}
 
-Now, using $f_{1N}$, $c$, along with our understanding of $s_{3}$ and $s_{4}$
+Now, using $f_{1N}$, $c$, along with our understanding of $s_{3}$
 as a linear combination of linear and nonlinear codes, we can directly
 approximate CCGP. To do this, we need to find the position
-of $s_{3}$ and $s_{4}$ along the decoding vector defined by $f_{1N}$, and then
+of $s_{3}$ along the decoding vector defined by $f_{1N}$, and then
 we evaluate whether that magnitude is greater or smaller than the threshold
-$c/2$. So, to find this distance relative to the threshold, we need $d$ such
+$c/2$. So, to find this distance relative to the threshold, we need $d_{3}$ such
 that
 \begin{align}
   d_{3} &= f_{1N} \cdot s_{3} - \frac{c}{2} \\
   &= \frac{1}{c}\left(\dll f_{1} + \dn n_{12}\right)
-  \left(\dll f_{1} + \dla f_{2} + \dn n_{23}\right) - \frac{c}{2} 
+  \left(\dlg f_{1} + \dla f_{2} + \dn n_{23}\right) - \frac{c}{2} 
 \end{align}
 First, we focus on the first term and drop $c$ for now,
 \begin{align}
   t_{1} &= \left(\dll f_{1} + \dn n_{12}\right)
-  \left(\dll f_{1} + \dla f_{2} + \dn n_{23}\right) \\
-  &= \dll^{2} + \dll \dn f_{1} n_{23} + \dll \dn f_{1} n_{12}
+  \left(\dlg f_{1} + \dla f_{2} + \dn n_{23}\right) \\
+  &= \dll\dlg + \dll \dn f_{1} n_{23} + \dlg \dn f_{1} n_{12}
   + \dla \dn f_{2} n_{12} + \dn^{2} n_{23} n_{12} \\
-  &= \dll^{2} + \frac{1}{2}\dn^{2}
-  + \frac{\dll \dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}
-  + f_{1}n_{2} + f_{1}n_{3}\right) + \dla \dn n_{12}f_{2} 
+  &= \dll\dlg + \frac{1}{2}\dn^{2}
+  + \frac{\dn}{\sqrt{2}}\left(\dlg f_{1}n_{1} + \dlg f_{1}n_{2}
+  + \dll f_{1}n_{2} + \dll f_{1}n_{3}\right) + \dla \dn n_{12}f_{2} 
 \end{align}
 Next, we bring back the full expression and multiply everything by $c$,
 \begin{align}
-  c d_{3} &= \dll^{2} + \frac{1}{2}\dn^{2}
-  + \frac{\dll \dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}
-  + f_{1}n_{2} + f_{1}n_{3}\right) + \dla \dn n_{12}f_{2}
+  c d_{3} &= \dll\dlg + \frac{1}{2}\dn^{2}
+  + \frac{\dn}{\sqrt{2}}\left(\dlg f_{1}n_{1} + \dlg f_{1}n_{2}
+  + \dll f_{1}n_{2} + \dll f_{1}n_{3}\right) + \dla \dn n_{12}f_{2}
   - \frac{c^{2}}{2} \\
-  &= \dll^{2} + \frac{1}{2}\dn^{2}
-  + \frac{\dll \dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}
-  + f_{1}n_{2} + f_{1}n_{3}\right) + \dla \dn n_{12}f_{2}
+  &= \dll\dlg + \frac{1}{2}\dn^{2}
+  + \frac{\dn}{\sqrt{2}}\left(\dlg f_{1}n_{1} + \dlg f_{1}n_{2}
+  + \dll f_{1}n_{2} + \dll f_{1}n_{3}\right) + \dla \dn n_{12}f_{2}
   \\ &- \frac{1}{2}\dll^{2} - \frac{1}{2} \dn^{2}
   - \frac{\dll\dn}{\sqrt{2}}\left(f_{1}n_{1} + f_{1}n_{2}\right) \\
-  &= \frac{1}{2}\dll^{2} + \dll\dn f_{1}n_{23} + \dla\dn f_{2}n_{12} \\
-  d_{3} &= \frac{\frac{1}{2}\dll^{2} + \dll\dn f_{1}n_{23} + \dla\dn f_{2}n_{12}}
+  &= \dlg\dll - \frac{1}{2}\dll^{2} + (\dlg - \dll)\dn f_{1}n_{12} +
+  \dll\dn f_{1}n_{23} + \dla\dn f_{2}n_{12} \\
+  d_{3} &= \frac{\dlg\dll - \frac{1}{2}\dll^{2} + (\dlg - \dll)\dn f_{1}n_{12} +
+  \dll\dn f_{1}n_{23} + \dla\dn f_{2}n_{12}}
   {\sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn f_{1}n_{12}}} \\
-  d_{3} &\sim \frac{\frac{1}{2}\dll^{2} + \dll\dn \dis + \dla\dn \dis}
+  d_{3} &\sim \frac{\dlg\dll - \frac{1}{2}\dll^{2} + (\dlg - \dll)\dn \dis +
+  \dll\dn \dis + \dla\dn \dis}
   {\sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn \dis}}
 \end{align}
 and this $d_{3}$ relates to the CCGP error rate in the following way,
 \begin{align}
-  P(\textrm{CCGP error}_{1}) &= \mathbb{E}_{d_{3}} \; Q\left(d_{3}/\sigma\right)
+  P(\textrm{CCGP error}_{1}) &= \mathbb{E}_{d_{3}} \; Q\left(-d_{3}/\sigma\right)
 \end{align}
-The calculation for $s_{4}$ is analogous and leads to the same result,
-thus we drop the dependence on $3$ and write
-\begin{align}
-  P(\textrm{CCGP error}) &= \mathbb{E}_{d} \; Q\left(d/\sigma\right) \\
-  &= \mathbb{E} \; Q\left(\frac{1}{\sigma}
-  \frac{\frac{1}{2}\dll^{2} + \dll\dn \dis + \dla\dn \dis}
-  {\sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn \dis}}\right)
-\end{align}
-For large $D$, we can further simplify by ignoring the random variables
+Thus, making $d_{3}$ as large as possible will minimize CCGP errors. 
+%% \begin{align}
+%%   P(\textrm{CCGP error}) &= \mathbb{E}_{d} \; Q\left(d/\sigma\right) \\
+%%   &= \mathbb{E} \; Q\left(\frac{1}{\sigma}
+%%   \frac{\dlg\dll - \frac{1}{2}\dll^{2} + (\dlg - \dll)\dn \dis +
+%%   \dll\dn \dis + \dla\dn \dis}
+%%   {\sqrt{\dll^{2} + \dn^{2} + 2 \dll \dn \dis}}\right)
+%% \end{align}
+
+For $D$ much larger than any of $\dlg^{2}$, $\dla^{2}$, $\dll^{2}$, we can
+further simplify by ignoring the random variables
 (which is also the case where the nonlinear and linear codes are perfectly
 orthogonal to each other),
 \begin{align}
-  P(\textrm{CCGP error}) &\approx Q\left(\frac{1}{\sigma}
-  \frac{\frac{1}{2}\dll^{2}}
+  P(\textrm{CCGP error}) &\approx Q\left(-\frac{1}{\sigma}
+  \frac{\dlg\dll - \frac{1}{2}\dll^{2}}
   {\sqrt{\dll^{2} + \dn^{2}}}\right)
+\end{align}
+Next, we can rewrite this in terms the number of features $K$, the number of
+values $n$ taken on by each feature, the steps on the lattice separating
+the trained pair from each other $i$ (i.e., $\dll = i d_{L}$) and the
+generalized stimulus from the
+reference stimulus $j$ (i.e., $\dlg = j d_{L}$), as well as the linear $P_{L}$
+and nonlinear $P_{N}$ power. So,
+\begin{align}
+  P(\textrm{CCGP error}) &\approx Q\left(-\frac{12 P_{L}}{K (n^{2} - 1)\sigma}
+  \frac{ij - \frac{1}{2}i^{2}}
+  {\sqrt{i^{2}\frac{12 P_{L}}{K(n^{2} - 1)} + 2 P_{N}}}\right)  
 \end{align}
 
 %% Now, we find the optimal $f_{2}$ in the disorted code, which is also the category

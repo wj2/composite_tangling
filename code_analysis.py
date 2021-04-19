@@ -3,6 +3,7 @@ import numpy as np
 import functools as ft
 import multiprocessing as mp
 import itertools as it
+import scipy.optimize as so
 
 import general.utility as u
 import composite_tangling.code_creation as cc
@@ -74,7 +75,7 @@ def ccgp_pair_error_rate(d_nl, lg, lc1, lc2, noise_var, n_neurs, n=5000):
     # print((c2/2)**2 -  b2**2)
     y1 = np.sqrt((c2/2)**2 - b2**2)
     y2 = -np.sqrt((c2/2)**2 - b2**2)
-    print(y1, d/2)
+    # print(y1, d/2)
     y1 = d/2
     y2 = -d/2
     
@@ -88,9 +89,115 @@ def ccgp_pair_error_rate(d_nl, lg, lc1, lc2, noise_var, n_neurs, n=5000):
     err = np.mean((err1 + 1 - err2)/2, axis=0)
     return err, t1, t2    
 
+def analytic_necessary_power(k, ni, noise_var, n_neurs, flex_target=.95,
+                             ccgp_target=.95, i=1, j=1, include_flex=True,
+                             include_ccgp=True):
+    d_f = sts.norm(0, 1).ppf(1 - flex_target)
+    d_g = sts.norm(0, 1).ppf(1 - ccgp_target)
+    n_s = ni**k
+
+    if include_flex:
+        p_n = (d_f**2)*n_s*noise_var
+    else:
+        p_n = 0
+    if include_ccgp:
+        a = i*12/(k*(ni**2 - 1))
+        b = 2*p_n
+        c_num = (d_g**2)*(k**2)*((ni**2 - 1)**2)*noise_var
+        c_den = (12**2)*((i*j - .5*i**2)**2)
+        c = c_num/c_den
+        p_l = (c*a + np.sqrt((c*a)**2 + 4*b*c))/2
+    else:
+        p_l = 0
+    return p_l, p_n
+
+def find_necessary_power(k, ni, noise_var, n_neurs, n=5000, target=.95,
+                         tolerance=.01, include_ccgp=True, include_flex=True,
+                         reg_weight=0, print_theory_diff=False):
+    def opt_func(arg):
+        p_l, p_n = arg
+        gen = 1 - ccgp_error_rate(p_l, p_n, k, ni, noise_var,
+                                  n_neurs, n=n)[0]
+        flex = 1 - partition_error_rate(p_n, noise_var, ni**k)
+        loss = (include_ccgp*np.abs(target - gen)
+                + include_flex*np.abs(target - flex)
+                + reg_weight*np.sqrt(p_l + p_n))
+        return loss
+    res = so.minimize(opt_func, (10, 10), bounds=((0, None), (0, None)))
+    p_l, p_n = res.x
+    p_l_ana, p_n_ana = analytic_necessary_power(k, ni, noise_var, n_neurs,
+                                                include_flex=include_flex,
+                                                include_ccgp=include_ccgp)
+    if print_theory_diff and res.fun > .0001:
+        print('opt', p_l, p_n)
+        print('ana', p_l_ana, p_n_ana)
+        print('fun', res.fun)
+    if print_theory_diff and (np.abs(p_l - p_l_ana) > .01
+                              or np.abs(p_n - p_n_ana) > .01):
+        print('--- off ---')
+        print('opt', p_l, p_n)
+        print('ana', p_l_ana, p_n_ana)
+        print('fun', res.fun)
+        print('-----------')
+        
+    if res.fun - reg_weight*np.sqrt(p_l + p_n) > tolerance:
+        p_l = np.nan
+        p_n = np.nan
+    return p_l, p_n
+
+def make_gen_flex_pwr_regions(reg_range, feat_range, val_range, *args,
+                              **kwargs):
+    out_npwr = np.zeros((len(reg_range), len(feat_range), len(val_range)))
+    out_lpwr = np.zeros_like(out_npwr)
+    for i, reg in enumerate(reg_range):
+        out = make_gen_flex_pwr(feat_range, val_range, *args, regions=reg,
+                                **kwargs)
+        out_npwr[i], out_lpwr[i] = out
+    return out_lpwr, out_npwr
+
+def make_gen_flex_pwr(feat_range, val_range, noise_var, n_neurs, n=5000,
+                      use_analytic=False, regions=1, assignment=True,
+                      **kwargs):
+    opt_npwr = np.zeros((len(feat_range), len(val_range)))
+    opt_lpwr = np.zeros_like(opt_npwr)
+    k_reg = np.array(feat_range)/regions
+    k_reg[k_reg < 1] = 1
+    if assignment and regions > 1:
+        k_reg = k_reg + 1
+    for i, k in enumerate(k_reg):
+        for j, ni in enumerate(val_range):
+            if use_analytic:
+                p_lopt, p_nopt = analytic_necessary_power(k, ni, noise_var,
+                                                          n_neurs, **kwargs)
+            else:
+                p_lopt, p_nopt = find_necessary_power(k, ni, noise_var,
+                                                      n_neurs, n=n, **kwargs)
+            opt_npwr[i, j] = regions*p_nopt
+            opt_lpwr[i, j] = regions*p_lopt
+    return opt_lpwr, opt_npwr
+
+def make_ccgp_shatter_phase(pwr, n_trades, feat_range, val_range, noise_var,
+                            n_neurs, n=5000):
+    trades = np.linspace(0, 1, n_trades)
+    combs = list(it.product(trades, feat_range, val_range))
+    combs_inds = list(it.product(range(n_trades), range(len(feat_range)),
+                                 range(len(val_range))))
+
+    ccgp = np.zeros((n_trades, len(feat_range), len(val_range)))
+    shatt = np.zeros_like(ccgp)
+    
+    for i, (t, k, ni) in enumerate(combs):
+        p_l = pwr*(1 - t)
+        p_n = pwr*t
+        ccgp[combs_inds[i]] = ccgp_error_rate(p_l, p_n, k, ni, noise_var,
+                                              n_neurs, n=n)[0]
+        shatt[combs_inds[i]] = partition_error_rate(p_n, noise_var, ni**k)
+        
+    return trades, ccgp, shatt
+
 def ccgp_error_rate(p_l, p_n, n_feats, n_values, noise_var, n_neurs, n=5000):
-    d_nl = get_mixed_theory_distance(p_n, n_feats, n_values)[0]
-    d_lin = get_linear_theory_distance(p_l, n_feats, n_values)[0]
+    d_nl = get_mixed_theory_distance(p_n, n_feats, n_values)
+    d_lin = get_linear_theory_distance(p_l, n_feats, n_values)
     lg = d_lin
     lc1 = d_lin
     lc2 = d_lin
