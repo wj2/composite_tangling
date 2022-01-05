@@ -8,19 +8,39 @@ import sklearn.svm as skc
 import scipy.special as ss
 
 import mixedselectivity_theory.nms_discrete as nmd
+import general.utility as u
+
+def l2_norm(arr, axis=1):
+    return np.sum(arr**2, axis=1)
 
 def hamming(xs, ys):
-    b = np.all(xs == ys, axis=1)
+    if len(xs.shape) > 2:
+        axis = (1, 2)
+    else:
+        axis = 1
+    b = np.all(xs == ys, axis=axis)
     return b
 
+def hamming_set(stim1, stim2):
+    same = np.zeros(len(stim1), dtype=bool)
+    for i, s1_i in enumerate(stim1):
+        set_1 = set(tuple(s1_ij) for s1_ij in s1_i)
+        set_2 = set(tuple(s2_ij) for s2_ij in stim2[i])
+        same[i] = set_1 == set_2
+    return same
+
 def mse(xs, ys):
-    m = np.sum((xs - ys)**2, axis=1)
+    if len(xs.shape) > 2:
+        axis = (1, 2)
+    else:
+        axis = 1
+    m = np.sum((xs - ys)**2, axis=axis)
     return m
 
 class Code(object):
 
     def __init__(self, n_feats, n_values, n_neurs, power=1, noise_cov=1,
-                 pwr_func=nmd.empirical_variance_power_func, use_radius=False,
+                 pwr_func=nmd.empirical_variance_power_func, use_radius=True,
                  **stim_kwargs):
         if use_radius:
             pwr_func = nmd.empirical_radius_power_func
@@ -31,6 +51,7 @@ class Code(object):
         self.power = power
         out = self.make_stimuli(n_feats, n_values, **stim_kwargs)
         self.stim, self.stim_proc, self.stim_dict = out
+        self.stim_arr = np.array(self.stim)
         self.inv_stim_dict = {v:k for k, v in self.stim_dict.items()}
         self.noise_distr = sts.multivariate_normal(np.zeros(n_neurs), noise_cov)
         self.snr = np.sqrt(power/noise_cov)
@@ -67,6 +88,28 @@ class Code(object):
         r2 = self.get_representation(stim2)
         d = np.sqrt(np.sum((r1 - r2)**2))
         return d
+
+    def get_all_distances(self):
+        dists_all = np.zeros((len(self.rep), len(self.rep)))
+        for i, stim_i in enumerate(self.rep):
+            dists_all[i] = u.euclidean_distance(stim_i, self.rep)
+        return dists_all
+
+    def get_min_distance_ns(self, eps=.001, second=False):
+        md = self.get_minimum_distance()
+        if second:
+            md = np.sqrt(2)*md
+        dists_all = self.get_all_distances()
+        close = np.abs(dists_all - md) < eps
+        ns = np.sum(close, axis=1)
+        return ns
+
+    def get_empirical_minimum_distance(self):
+        min_dist = np.inf
+        for (rep1, rep2) in it.combinations(self.rep, 2):
+            d = np.sqrt(np.sum((rep1 - rep2)**2))
+            min_dist = np.min((d, min_dist))
+        return min_dist
     
     def make_representations(self, mat, stim):
         reps = np.dot(stim, mat.T)
@@ -80,8 +123,13 @@ class Code(object):
         stim = np.array(stim)
         if len(stim.shape) == 1:
             stim = np.expand_dims(stim, 0)
-        reps = np.array(list(self.rep_dict[self.stim_dict[tuple(s)]]
-                             for s in stim))
+        if len(stim.shape) == 2:
+            stim = np.expand_dims(stim, 1)
+        reps = np.zeros((stim.shape[0], self.n_neurs))
+        for i in range(stim.shape[1]):
+            rep_i = np.array(list(self.rep_dict[self.stim_dict[tuple(s[i])]]
+                                  for s in stim))
+            reps = reps + rep_i
         if noise:
             reps = self._add_noise(reps)
         return reps
@@ -122,14 +170,38 @@ class Code(object):
                 c2_test_stim = c2_test_stim[c2_exclusion]
                 c2_test_rep = self.get_representation(c2_test_stim)
 
-                print(c1_eg_stim) 
-                print(c1_test_stim)
+                # print(c1_eg_stim) 
+                # print(c1_test_stim)
 
-                print(c2_eg_stim)
-                print(c2_test_stim)
+                # print(c2_eg_stim)
+                # print(c2_test_stim)
                 train_sets.append((c1_eg_rep, c2_eg_rep))
                 test_sets.append((c1_test_rep, c2_test_rep))
         return train_sets, test_sets                
+
+    def compute_specific_ccgp(self, train_dim, gen_dim, train_dist=1,
+                              gen_dist=1, n_reps=10, ref_stim=None,
+                              train_noise=False, n_train=10, **dec_kwargs):
+        if ref_stim is None:
+            ref_stim = self.stim[0]
+        tr_stim = tuple(rs + train_dist*(i == train_dim)
+                        for i, rs in enumerate(ref_stim))
+        gen_stim1 = tuple(rs + gen_dist*(i == gen_dim)
+                          for i, rs in enumerate(ref_stim))
+        gen_stim2 = tuple(rs + gen_dist*(i == gen_dim)
+                          for i, rs in enumerate(tr_stim))
+        tr_rep1 = self.get_representation(ref_stim)
+        tr_rep2 = self.get_representation(tr_stim)
+        te_rep1 = self.get_representation(gen_stim1)
+        te_rep2 = self.get_representation(gen_stim2)
+        pcorr = self.decode_rep_classes(tr_rep1, tr_rep2,
+                                        c1_test=te_rep1,
+                                        c2_test=te_rep2,
+                                        n_reps=n_reps,
+                                        train_noise=train_noise,
+                                        n_train=n_train,
+                                        **dec_kwargs)
+        return pcorr
     
     def compute_ccgp(self, use_vals=1, n_reps=10, **dec_kwargs):
         train_sets, test_sets = self._get_ccgp_stim_sets()
@@ -159,7 +231,7 @@ class Code(object):
         labels = np.concatenate((np.zeros(n_half), np.ones(n_half)))
         return reps, labels
     
-    def decode_rep_classes(self, c1, c2, n_train=10**3, n_test=10**4,
+    def decode_rep_classes(self, c1, c2, n_train=10**3, n_test=10**2,
                            n_reps=10, classifier=skc.SVC, kernel='linear',
                            train_noise=True, c1_test=None, c2_test=None,
                            test_noise=True, **classifier_params):
@@ -227,29 +299,73 @@ class Code(object):
         for i, r in enumerate(reps):
             stim[i] = self.inv_stim_dict[self.inv_rep_dict[tuple(r)]]
         return stim
+
+    def sample_stimuli(self, n, n_stim=1, squeeze=True):
+        rand_inds = np.random.choice(self.n_stimuli, n*n_stim)
+        out = np.reshape(self.stim_arr[rand_inds], (n, n_stim, -1))
+        if squeeze:
+            out = np.squeeze(out)
+        return out
+
+    def sample_stim_reps(self, n, n_stim=1, noise=True):
+        stim = self.sample_stimuli(n, n_stim=n_stim, squeeze=False)
+        reps = self.get_representation(stim, noise=noise)
+        return stim, reps
+
+    def _get_rep_distances(self, reps, n_stim=1, dist_metric=l2_norm):
+        stim_combs_mixes = np.array(list(it.combinations(self.stim,
+                                                         n_stim)))
+        stim_combs_doubles = np.stack((self.stim,)*n_stim, axis=1)
+        stim_combs = np.concatenate((stim_combs_mixes, stim_combs_doubles),
+                                    axis=0)
+        out = np.zeros((len(reps), len(stim_combs)))
+        for i, sc in enumerate(stim_combs):
+            mean_rep = self.get_representation(np.expand_dims(sc, 0))
+            rep_minus = reps - mean_rep
+            out[:, i] = dist_metric(rep_minus)
+        return stim_combs, out
+
+    def get_average_swaps(self, n_stim, n=100, eps=.001):
+        stim, reps = self.sample_stim_reps(n, n_stim=n_stim, noise=False)
+        combs, dist = self._get_rep_distances(reps, n_stim=n_stim)
+        print(stim[0])
+        print(dist[0])
+        print(dist[0] < eps)
+        total = np.sum(dist < eps, axis=1) - 1
+        mean = np.mean(total)
+        return total, mean
     
-    def compute_trl_metric(self, metric=hamming, n=5000):
-        rand_inds = np.random.choice(self.n_stimuli, n)
-        reps = self.rep[rand_inds]
-        noisy_reps = self._add_noise(reps)
-        stim_orig = self.get_stim_from_reps(reps)
-        stim_dec = self.decode_nn(noisy_reps)
-        m = metric(stim_orig, stim_dec)
+    def get_posterior_probability(self, reps, n_stim=1):
+        return self._get_rep_distances(reps, n_stim=n_stim,
+                                       dist_metric=self.noise_distr.logpdf)
+    
+    def compute_trl_metric(self, metric=hamming, n=5000, n_stim=1):
+        stim_orig, reps = self.sample_stim_reps(n, n_stim)
+        stim_dec = self.decode_nn(reps, n_stim=n_stim)
+        m = metric(np.squeeze(stim_orig), stim_dec)
         return m
         
     def compute_mse(self, **kwargs):
         return self.compute_trl_metric(metric=mse, **kwargs)
 
-    def compute_discrim(self, **kwargs):
-        return self.compute_trl_metric(metric=hamming, **kwargs)
+    def compute_discrim(self, n_stim=1, **kwargs):
+        if n_stim > 1:
+            metric = hamming_set
+        else:
+            metric = hamming
+        return self.compute_trl_metric(metric=metric, n_stim=n_stim,
+                                       **kwargs)
 
-    def decode_nn(self, noisy_reps):
-        stim_dec = np.zeros((noisy_reps.shape[0], self.n_feats))
-        for i, nr in enumerate(noisy_reps):
-            rep, _ = nmd.decode_word(nr, self.rep)
-            ps = self.inv_rep_dict[tuple(rep)]
-            stim_dec[i] = self.inv_stim_dict[ps]
-        return stim_dec
+    def decode_nn(self, noisy_reps, n_stim=1):
+        stim_combs, outs = self._get_rep_distances(noisy_reps, n_stim=n_stim)
+        min_inds = np.argmin(outs, axis=1)
+        stim_dec = stim_combs[min_inds]
+        # stim_dec = np.zeros((noisy_reps.shape[0], self.n_feats))
+        # for i, nr in enumerate(noisy_reps):
+        #     rep, _ = nmd.decode_word(nr, self.rep)
+        #     ps = self.inv_rep_dict[tuple(rep)]
+        #     stim_dec[i] = self.inv_stim_dict[ps]
+        return np.squeeze(stim_dec)
     
 class LinearCode(Code):
 
@@ -271,6 +387,14 @@ class DiscreteMixedCode(Code):
         stim_dict = dict(zip(stim, stim_proc))
         return stim, stim_proc, stim_dict
 
+def make_code(tradeoff, total_power, *args, codes=None, **kwargs):
+    if codes is None:
+        codes = [LinearCode, DiscreteMixedCode]
+    code_props = [tradeoff, 1 - tradeoff]
+    code = CompositeCode(codes, code_props, *args, total_power=total_power,
+                         **kwargs)
+    return code
+    
 class CompositeCode(Code):
     
     def __init__(self, codes, powers, n_feats, n_values, n_neurs,
@@ -291,7 +415,7 @@ class CompositeCode(Code):
         self.codes = code_list
         super().__init__(n_feats, n_values, n_neurs, power=total_power,
                          noise_cov=noise_cov)
-
+        
     def make_stimuli(self, n_feats, n_values):
         stim = self.codes[0].stim
         stim_proc = list(zip(*tuple(c.stim_proc
@@ -300,7 +424,7 @@ class CompositeCode(Code):
         return stim, stim_proc, stim_dict
 
     def make_encoding_matrix(self, n, stim, **kwargs):
-        stim = np.array(stim)
+        stim = np.array(stim, dtype=object)
         mat = np.zeros((n, stim.shape[1]))
         return mat
     

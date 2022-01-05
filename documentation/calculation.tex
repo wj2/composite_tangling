@@ -20,7 +20,7 @@
 \usepackage{etoolbox}
 \cslet{blx@noerroretextools}\empty
 \usepackage[style=nature]{biblatex}
-\linenumbers
+%% \linenumbers
 
 
 \newcommand*\patchAmsMathEnvironmentForLineno[1]{%
@@ -73,6 +73,7 @@
 \newcommand{\dn}{d_{N}}
 \newcommand{\dis}{\mathcal{N}(0, 1/D)}
 \newcommand{\fno}{f_{2N}^{\text{opt}}}
+\newcommand{\E}{\mathbb{E}}
 
 % \doublespacing
 
@@ -84,57 +85,81 @@
 
 %% \maketitle
 
-\section{The tradeoff between flexibility and generalization for discrete codes}
+\section{Analysis of discrete linear-nonlinear codes}
 
-\subsection{Approximating code flexibility}
-We consider a code for a discrete set of stimuli to be flexible if arbitrary
-binary partitions of that set can be read out with a linear decoder. When a code
-has a mixture of linear and nonlinear stimulus representations, some partitions
-are orthogonal to the linear structure in the representation and can be
-implemented only if the nonlinear components of the representation are strong
-enough -- one such partition is the parity or XOR partition. Thus, to approximate
-code flexibility, we will focus on this case. It allows us to ignore any
-contribution to the representation from the linear code and focus only on the
-nonlinear code.
-
-In the nonlinear code for $n^{K} = N_{s}$ stimuli, all of the stimuli are
-$\sqrt{P_{N}}$ from the origin in representation space and $\sqrt{2P_{N}}$ from
-each other. In this case, the vector corresponding to the optimal hyperplane for
-a linear decoder that
-implements an arbitrary partition of such stimuli has a constant magnitude
-$c$ in the direction of all stimuli -- and the magnitude is positive for
-stimuli in one category and negative for stimuli in the other category. Using
-this understanding, we can calculate the performance of the linear decoder where
-$r$ is the decoding vector, $x$ is particular stimulus representation in the
-positive category, and $\sigma^{2}$ is the variance of normally distributed output
-noise for the neurons in the code:
+\subsection{Code definition}
+We consider the following family of code,
 \begin{align}
-  E_{f} &= P(r \dot x > 0) \\
-  &= P(\mathcal{N}(\sqrt{P_{N}}, N_{s} \sigma^{2}) > 0) \\
-  &= Q\left(-\frac{\sqrt{P_{N}}}{\sqrt{N_{s}\sigma^{2}}}\right) \\
-  &= Q\left(-\frac{\sqrt{P_{N}}}{n^{K/2} \sigma}\right) \\
+  r = f_{L}(x) + f_{IK}(x) + \epsilon
 \end{align}
-where $Q$ is the cumulative distribution function of the standard normal
-distribution.
+where the $N$-dimensional neural response $r$ to stimulus $x \in [1, ..., n]^{K}$
+is modeled in terms of a linear part, $f_{L}(x)$, a nonlinear part, $f_{NL}(x)$,
+and additive Gaussian noise, $\epsilon \sim \mathcal{N}(0, \sigma^{2} I_{N})$.
+The linear part has the form, 
+\begin{align}
+  f_{L}(x) = M x_{\textrm{z}}
+\end{align}
+where $M$ is an $N \times K$ matrix and $x_{\textrm{z}}$ is z-scored version of
+$x$. The magnitude of vectors in $M$ are chosen so that
+$\E_{x} f_{L}(x)^{2} = P_{L}$.
+The nonlinear part has the form,
+\begin{align}
+  f_{NL}(x)_{i} = \sqrt{P_{NL}} n_{i} [x_{1} = t_{i}(1)] ... [x_{K} = t_{i}(K)]
+\end{align}
+for $i \in [1, ..., n^{K}]$ where $[...]$ is the indicator function,
+$t_{i}$ returns a values in $[1, ..., K]$, and $n_{i}$ is a unit vector chosen
+so that $n_{i} \cdot n_{j} = 0 \, \forall \, i \ne j$. That is, there is a dimension in
+$f_{NL}$ that is one for a single, unique stimulus and zero for all other stimuli.
 
-\subsection{Approximating code generalization}
-We consider a code to have good generalization performance when a linear decoder
-aligned with some combination of code features that is learned on one part of the
-stimulus space provides good performance on another part of the stimulus space.
-In a simple case with two stimulus features that each take on two values, this
-means that a linear decoder that discriminates the value of the second feature
-(0 or 1) learned for a fixed value of the first feature (say, 0) will generalize
-with minimal loss of performance to other values of the first feature (in this
-case, 1). This notion of generalization performance is referred to as
-cross-condition generalization performance (CCGP).
+A set of stimuli is defined by two parameters: $K$, the number of distinct
+features, or latent variables; $n$, the number of a discrete values that each of
+the $K$ features takes on. There are $n^{K}$ unique stimuli. A code is described
+by four parameters: $P_{L}$ and $P_{NL}$ are the power of the linear and
+nonlinear code parts, respectively -- the total power is $P = P_{L} + P_{NL}$;
+the number of neurons $N$; and the noise variance $\sigma^{2}$. The
+$\textrm{SNR} = \sqrt{P/\sigma^{2}}$. 
 
-We set out to approximate CCGP with a pair of stimuli used for training and
-a third stimulus that must be generalized to. Here, we consider a linear code
-that is distorted by a nonlinear code.
-Thus, we can consider distances in the purely linear code and distances in the
-purely nonlinear code separately.
+\textbf{Current results:}
+\begin{enumerate}
+\item Analytic approximation of the error rate.
+\item Analytic worst-case lower bound on XOR performance.
+\item Analytic approximation of the CCGP.
+\end{enumerate}
 
-\subsubsection{Preliminaries}
+\textbf{Current applications:}
+\begin{enumerate}
+\item Can show the SNR required for both high flexibility and CCGP for a
+  given stimulus set.
+\item Can simulate responses to multiple simultaneous stimuli and get error
+  rate. 
+\end{enumerate}
+
+\textbf{Possible extensions/applications:}
+\begin{enumerate}
+\item Can show how many examples are necessary to learn a generalizable category
+  boundary (a la Ben's paper).
+\item Can make claims about modularity for some kinds of tasks. 
+\item Can use to model transfer in perceptual learning.
+\item Can characterize tradeoff between CCGP and multi-stimulus capacity
+  (high multi-stimulus capacity may imply low CCGP). 
+\item Additional code parts (e.g., $f_{I1}$).
+\item Continuous stimuli.
+\end{enumerate}
+
+\subsection{Preliminaries}
+To estimate the error rate and other quantities in these codes, we need to
+understand how the code parameters scale the distances in representation space
+between nearby stimuli. This distance will be important for deriving error and
+generalization rates. We do this separately for the different code parts and
+show that the distances are close to additive later.
+
+\subsubsection{The linear code part}
+In the linear code, all stimuli lie on a $K$-dimensional rectangular lattice.
+We derive the distance between points on that lattice as a function of our
+stimulus and code parameters, as well as the number of neighbors a
+representation has at minimum and next-from-minimum distance.
+
+\textbf{Linear distance derivation:}
 First, we find how the distance between
 adjacent stimuli in the linear code depends on the number of features $K$ and
 the number of values that each feature takes on $n$ along with the linear power
@@ -143,7 +168,6 @@ of the code ($P_{L}$),
 d_{L} &= \sqrt{\frac{12 P_{L}}{K (n^2 - 1)}}
 \end{align}
 
-\textbf{Linear distance derivation:}
 We approach this by computing the variance (i.e., the linear power $P_{L}$)
 of a uniformly sampled $K$-dimensional lattice with $n$ points spaced at distance
 $d_{L}$ along each dimension. Then, we
@@ -183,27 +207,157 @@ Now, we rewrite in terms of $d_{L}$,
 \end{align}
 which is the expression given above.
 
-This distance can be used as a scaling factor that allows translation between
-distance in stimulus space and distance in representation space -- that is,
-if two stimuli have distance $l$ in stimulus space, then they have distance
-$l d_{L}$ in representation space. However, this assumes that each feature is
-encoded with the same fidelity, which may not always be true.
+Following from the lattice structure, stimuli at a diagonal point on the lattice
+have distance $\sqrt{2} d_{L}$.
 
-Second, we find that the nonlinear distance is,
+\textbf{Linear neighbors derivation:}
+Second, we find the average number of neighbors that a particular stimulus has at
+both this nearest distance $N_{LA}$ and nearest diagonal distance $N_{LD}$. This
+is a counting problem. We observe that, in the lattice, there are two edge values
+for each feature and $n - 2$ non-edge values. Thus,
+\begin{align}
+  N_{LA} &= \frac{1}{n^{K}}
+  \sum_{c = 0}^{K} (2K - c)\binom{K}{c} (n - 2)^{K - c} 2^{c}
+\end{align}
+and
+\begin{align}
+  N_{LD} &= \frac{1}{n^{K}} \sum_{c = 0}^{K} \left(4\binom{K - c}{2} + 2(K - c)c
+  + \binom{C}{2}\right)
+  \binom{K}{c} (n - 2)^{K - c} 2^{c}
+\end{align}
+
+\textbf{Nonlinear distance derivation:}
+The nonlinear distance has been treated in detail elsewhere (for any $f_{Ic}$ with
+$c \in [1, ..., K]$). The nonlinear distance is
 \begin{align}
   d_{N} &= \sqrt{2 P_{N}}
 \end{align}
-Further, we can also observe that each representation in the linear code
-undergoes a distortion of magnitude $P_{N}$ in a random direction.
 
-Third, we remind ourselves that the dot product of two random unit vectors
-$u_{1} \cdot u_{2}$ in a $D$-dimensional space follows the distribution
+\textbf{Nonlinear neighbors derivation:}
+Because each nonlinear representation is along a vector that is orthogonal to all
+other nonlinear representations, from a particular stimulus all other
+representations are at minimum distance. So,
 \begin{align}
-  u_{1} \cdot u_{2} &\sim \dis
+  N_NL &= n^{K} - 1
 \end{align}
-for large $D$.
 
-\subsubsection{Main derivation}
+\textbf{Total code distance:}
+Naively, the total code distance would be
+\begin{align}
+  d_{C} &= \sqrt{d_{L}^{2} + d_{NL}^{2}}
+\end{align}
+However, because the linear and nonlinear parts are chosen to project into random
+subspaces, there is the chance of some alignment. Thus, the corrected total code
+distance is a random variable with the following form,
+\begin{align}
+  d_{C} &= \sqrt{d_{L}^{2} + d_{NL}^{2} + 2 d_{NL} d_{L} \eta}
+\end{align}
+where $\eta \sim \mathcal{N}(0, 1/N)$ due to the fact that the dot product of
+two unit vectors are normally distributed with variance inverse to their length
+(i.e., the distribution of $\eta$). The distance is similary defined for the
+next nearest stimuli,
+\begin{align}
+  d_{C + 1} &= \sqrt{2d_{L}^{2} + d_{NL}^{2} + \sqrt{8} d_{NL} d_{L} \eta}
+\end{align}
+
+\textbf{Total code neighbors:}
+To combine the code neighbors, it is enough to simply take the minimum between
+the linear and nonlinear parts, which will always be equal to $N_{LA}$ (or $N_{LD}$
+for next-nearest). So,
+\begin{align}
+  N_{C} &= N_{LA} \\ 
+  N_{C + 1} &= N_{LD}
+\end{align}
+
+\textbf{Nonlinear distance as a function of linear distance:}
+It is of interest to compute how, for fixed power, linear and nonlinear
+distance depend on each other. So,
+\begin{align}
+  P &= P_{N} + P_{L} \\
+  &= \frac{d_{N}^{2}}{2} + K d_{L}^{2} \frac{n^{2} - 1}{12} \\
+  d_{N}^{2} &= 2 P - 2 K d_{L}^{2} \frac{n^{2} - 1}{12}\\
+  d_{N} &= \sqrt{2P - 2 K d_{L}^{2} \frac{n^{2} - 1}{12}}
+\end{align}
+
+\subsection{Approximating code error rate}
+First, we ask how often this family of codes will make errors. Here, we
+define an error as the most likely stimulus under a maximum likelihood decoder
+$\hat{x}$ not being the original stimulus $x$. Following the logic that the
+nearest stimuli are most likely to be errored toward, we develope the following
+expression for the error rate,
+\begin{align}
+  P(\textrm{error}) &= N_{C} Q\left(-\frac{d_{C}}{2\sigma}\right)
+  + N_{C + 1} Q\left(-\frac{d_{C + 1}}{2\sigma}\right)
+\end{align}
+Thus, we can see that the error rate depends most strongly on the distances.
+From our distance definitions, we know that increasing nonlinear power is the
+most efficient way to increase distance. As a consequence, to drive the error
+rate down, it is best to put all code power toward the nonlinear part. 
+
+For multiple stimuli, we hypothesize that we can write the code error rate as,
+\begin{align}
+  P(\textrm{error}) &= S N_{C} Q\left(-\frac{d_{C}}{2\sigma}\right)
+  + S N_{C + 1} Q\left(-\frac{d_{C + 1}}{2\sigma}\right)
+  + N_{S} Q\left(-\frac{d_{S}}{2\sigma}\right)
+\end{align}
+where $N_{S}$ is the number of equiprobable stimulus sets under the linear part
+of the code and $d_{S} = 2\sqrt{P_{N}}$ (maybe).
+
+\subsubsection*{The number of swaps}
+\begin{align}
+  N_{S} &= \frac{1}{2} \binom{S}{2} \sum_{i = 0}^{K - 1}
+  \binom{K}{i} \frac{1}{n}^{i} \left(1 - \frac{1}{n}\right)^{K - i}
+  \sum_{j = 1}^{K - i} \binom{K - i}{i}
+\end{align}
+
+\subsection{Approximating code flexibility}
+We consider a code for a discrete set of stimuli to be flexible if arbitrary
+binary partitions of that set can be read out with a linear decoder. When a code
+has a mixture of linear and nonlinear stimulus representations, some partitions
+are orthogonal to the linear structure in the representation and can be
+implemented only if the nonlinear components of the representation are strong
+enough -- one such partition is the parity or XOR partition. Thus, to approximate
+code flexibility, we will focus on this case. It allows us to ignore any
+contribution to the representation from the linear code and focus only on the
+nonlinear code. Further, we will take a lower bound on this case. 
+
+In the nonlinear code for $n^{K} = N_{s}$ stimuli, all of the stimuli are
+$\sqrt{P_{N}}$ from the origin in representation space and $\sqrt{2P_{N}}$ from
+each other. In this case, the vector corresponding to the optimal hyperplane for
+a linear decoder that
+implements an arbitrary partition of such stimuli has a constant magnitude
+$c$ in the direction of all stimuli -- and the magnitude is positive for
+stimuli in one category and negative for stimuli in the other category. Using
+this understanding, we can calculate the performance of the linear decoder where
+$r$ is the decoding vector, $x$ is particular stimulus representation in the
+positive category, and $\sigma^{2}$ is the variance of normally distributed output
+noise for the neurons in the code:
+\begin{align}
+  E_{f} &\geq P(r \dot x > 0) \\
+  &= P(\mathcal{N}(\sqrt{P_{N}}, N_{s} \sigma^{2}) > 0) \\
+  &= Q\left(-\frac{\sqrt{P_{N}}}{\sqrt{N_{s}\sigma^{2}}}\right) \\
+  &= Q\left(-\frac{\sqrt{P_{N}}}{n^{K/2} \sigma}\right) \\
+\end{align}
+where $Q$ is the cumulative distribution function of the standard normal
+distribution.
+
+\subsection{Approximating code generalization}
+We consider a code to have good generalization performance when a linear decoder
+aligned with some combination of code features that is learned on one part of the
+stimulus space provides good performance on another part of the stimulus space.
+In a simple case with two stimulus features that each take on two values, this
+means that a linear decoder that discriminates the value of the second feature
+(0 or 1) learned for a fixed value of the first feature (say, 0) will generalize
+with minimal loss of performance to other values of the first feature (in this
+case, 1). This notion of generalization performance is referred to as
+cross-condition generalization performance (CCGP).
+
+We set out to approximate CCGP with a pair of stimuli used for training and
+a third stimulus that must be generalized to. Here, we consider a linear code
+that is distorted by a nonlinear code.
+Thus, we can consider distances in the purely linear code and distances in the
+purely nonlinear code separately.
+
 We use $\dll$ to denote the distance in the linear code between the two
 stimulus representations used to learn the classification. This distance is
 along the unit vector $f_{1}$. Further, we use $\dlg$ to denote the distance

@@ -4,11 +4,12 @@ import functools as ft
 import multiprocessing as mp
 import itertools as it
 import scipy.optimize as so
+import scipy.stats as sts
+import sklearn.svm as svm
+import scipy.special as ss
 
 import general.utility as u
 import composite_tangling.code_creation as cc
-import scipy.stats as sts
-import sklearn.svm as svm
 
 def get_model_performance(snrs, n_feats, n_values, n_neurs, metric=cc.hamming,
                           n=5000, n_boots=1000, noise_var=1,
@@ -195,7 +196,8 @@ def make_ccgp_shatter_phase(pwr, n_trades, feat_range, val_range, noise_var,
         
     return trades, ccgp, shatt
 
-def ccgp_error_rate(p_l, p_n, n_feats, n_values, noise_var, n_neurs, n=5000):
+def ccgp_error_rate(p_l, p_n, n_feats, n_values, noise_var=1, n_neurs=1000,
+                    n=5000):
     d_nl = get_mixed_theory_distance(p_n, n_feats, n_values)
     d_lin = get_linear_theory_distance(p_l, n_feats, n_values)
     lg = d_lin
@@ -298,6 +300,152 @@ def get_linear_theory_distance(pwrs, n_feats, n_values, default_d=1):
 
 def get_mixed_theory_distance(pwrs, n_feats, n_values):
     return np.sqrt(2*pwrs)
+
+def compute_composite_swap_distance_empirical(pwrs, n_feats, n_values,
+                                              tradeoff=.5, n_neurs=1000,
+                                              n_stim=2, n_samps=1000):
+    code = cc.make_code(tradeoff, pwrs, n_feats, n_values, n_neurs)
+    stim = code.sample_stimuli(n_samps, n_stim)
+    stim_r = np.roll(stim[:, :, 0:1], 1, axis=1)
+    stim_r = np.concatenate((stim_r, stim[..., 1:]), axis=2)
+    reps = code.get_representation(stim, noise=False)
+    reps_r = code.get_representation(stim_r, noise=False)
+    dists = np.sqrt(np.sum((reps - reps_r)**2, axis=1))
+    return dists
+
+def compute_composite_distance_theory(pwrs, n_feats, n_values, tradeoff=.5,
+                                      n_neurs=1000, n_samples=1000,
+                                      supply_ds=None):
+    pwrs = np.array(pwrs)
+    if len(pwrs.shape) == 0:
+        pwrs = np.expand_dims(pwrs, 0)
+    if supply_ds is None:
+        d_l = get_linear_theory_distance(pwrs*tradeoff, n_feats, n_values)
+        d_nl = get_mixed_theory_distance(pwrs*(1 - tradeoff), n_feats, n_values)
+    else:
+        d_l, d_nl = supply_ds
+    d_l = np.expand_dims(d_l, 1)
+    d_nl = np.expand_dims(d_nl, 1)
+    mid = d_l*d_nl*sts.norm(0, np.sqrt(1/n_neurs)).rvs((len(pwrs), n_samples))
+    ts = d_l**2 + d_nl**2
+    d_near = np.sqrt(ts + 2*mid)
+    d_diag = np.sqrt(2*d_l**2 + d_nl**2 + np.sqrt(2)*2*mid)
+    d_swap = np.sqrt(2)*d_nl
+    return d_near, d_diag, d_swap
+
+def compute_composite_neighbors_theory(k, n):
+    total = n**k
+    track = 0
+    keep = np.zeros(k + 1)
+    diag = np.zeros(k + 1)
+    for c in range(k + 1):
+        amt = ss.comb(k, c)*(n - 2)**(k - c)*2**c
+        track = track + amt
+        neighs = 2*k - c
+        keep[c] = neighs*amt
+
+        amt_d = ss.comb(k, c)*(n - 2)**(k - c)*2**c
+        neighs_d = 4*ss.comb(k - c, 2) + 2*(k - c)*c + ss.comb(c, 2)
+        diag[c] = neighs_d*amt_d
+
+    avg = np.sum(keep)/total
+    avg_d = np.sum(diag/total)
+    return avg, avg_d
+
+def _stim_swaps(stim):
+    k = stim.shape[1]
+    s = stim.shape[0]
+    original_set = set(tuple(s_i) for s_i in stim)
+    rotations = it.product(range(s), repeat=k)
+    swaps = 0
+    u_swaps = set()
+    for r in rotations:
+        r_stim = np.stack(list(np.roll(stim[:, i], r[i]) for i in range(k)),
+                          axis=1)
+        r_set = set(tuple(rs_i) for rs_i in r_stim)
+        same = original_set == r_set
+        if not same:
+            trs = tuple(r_set)
+            contain = False
+            for i in range(s):
+                in_ = tuple(tuple(r) for r in np.roll(trs, i, axis=0)) in u_swaps
+                contain = contain or in_
+            if not np.any(contain):
+                u_swaps.add(trs)
+    # print(stim)
+    # print(u_swaps)
+    # print(len(u_swaps))
+    # print('----')
+    return len(u_swaps)
+
+def compute_feature_swaps_empirical(k, n, s, n_samps=1000):
+    code = cc.make_code(1, 10, k, n, 1000)
+    stim = code.sample_stimuli(n_samps, s)
+    print(code.get_average_swaps(s))
+    n_swaps = np.zeros(n_samps)
+    for i in range(n_samps):
+        n_swaps[i] = _stim_swaps(stim[i])
+    return np.mean(n_swaps)
+
+def compute_feature_swaps_theory(k, n, s):
+    k_sum = 0
+    for k_i in range(0, k - 1):
+        p = 1/n
+        q = 1 - p
+        k_diff = k - k_i
+        prob = ss.comb(k, k_i)*(p**k_i)*(q**k_diff)
+        amt = sum(ss.comb(k_diff, i)/2 for i in range(1, k_diff))
+        k_sum = k_sum + prob*amt
+    return k_sum*ss.comb(s, 2)
+
+def compute_composite_hamming_theory(pwrs, n_feats, n_values, noise_var=1,
+                                     n_stim=1, ret_types=False, tradeoff=.5,
+                                     mean=False, **kwargs):
+    out = compute_composite_distance_theory(pwrs, n_feats, n_values,
+                                            tradeoff=tradeoff, **kwargs)
+    d_near, d_diag, d_swap = out
+    
+    n_n, n_d = compute_composite_neighbors_theory(n_feats, n_values)
+    nearest_err = n_stim*n_n*sts.norm(0, 1).cdf(-d_near/(2*np.sqrt(noise_var)))
+    
+    diag_err = n_stim*n_d*sts.norm(0, 1).cdf(-d_diag/(2*np.sqrt(noise_var)))
+    err_types = [nearest_err.T, diag_err.T]
+    if n_stim > 1:
+        n_fswaps = compute_feature_swaps_theory(n_feats, n_values, n_stim)
+        err_swap = n_fswaps*sts.norm(0, 1).cdf(-d_swap/(2*np.sqrt(noise_var)))
+        err_types.append(err_swap.T)
+    total_err = np.sum(list(np.mean(et, axis=0) for et in err_types), axis=0)
+    if mean:
+        total_err = np.mean(total_err, axis=0)
+        err_types = list(np.mean(et, axis=0) for et in err_types)
+    if ret_types:
+        out = (total_err, err_types)
+    else:
+        out = total_err
+    return out 
+
+def compute_composite_hamming_empirical(pwrs, n_feats, n_values, n_neurs=1000,
+                                        tradeoff=.5, n_stim=1, n_samps=1000,
+                                        boots=True, **kwargs):
+    errs = np.zeros((n_samps, len(pwrs)))
+    for i, pwr in enumerate(pwrs):
+        code = cc.make_code(tradeoff, pwr, n_feats, n_values, n_neurs,
+                            **kwargs)
+        errs[:, i] = code.compute_discrim(n=n_samps, n_stim=n_stim)
+    if boots:
+        errs = u.bootstrap_tc(errs, np.nanmean, n=n_samps)
+    return errs
+
+def compute_composite_ccgp_empirical(pwrs, n_feats, n_values, n_neurs=1000,
+                                     tradeoff=.5, boots=True, n_samps=1000,
+                                     tr_dim=0, gen_dim=1, **kwargs):
+    errs = np.zeros((n_samps, len(pwrs)))
+    for i, pwr in enumerate(pwrs):
+        code = cc.make_code(tradeoff, pwr, n_feats, n_values, n_neurs)
+        errs[:, i] = code.compute_specific_ccgp(tr_dim, gen_dim, n_reps=n_samps)
+    if boots:
+        errs = u.bootstrap_tc(errs, np.nanmean, n=n_samps)
+    return errs
 
 def _compute_metrics(codes, n_feats, n_values, n_neurs, trade,
                      compute_shattering=True, compute_discrim=True,
