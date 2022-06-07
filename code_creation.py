@@ -215,18 +215,32 @@ class Code(object):
                                                **dec_kwargs)
         return pcorr
 
-    def _sample_noisy_reps(self, rs, n, add_noise=True):
+    def _sample_noisy_reps(self, rs, n, add_noise=True, ret_stim=False,
+                           ref_stim=None):
         r_inds = np.random.choice(rs.shape[0], int(n))
+        reps = rs[r_inds]
         if add_noise:
-            r_noisy_reps = self._add_noise(rs[r_inds])
+            r_noisy_reps = self._add_noise(reps)
         else:
-            r_noisy_reps = rs[r_inds]
-        return r_noisy_reps
-
-    def _make_decoding_reps(self, c1, c2, n, add_noise=True):
+            r_noisy_reps = reps
+        if ret_stim:
+            out = (r_noisy_reps, rs)
+        else:
+            out = r_noisy_reps
+        return out
+    
+    def _make_decoding_reps(self, c1, c2, n, add_noise=True,
+                            balance_training=False):
         n_half = int(n/2)
-        c1_train_reps = self._sample_noisy_reps(c1, n_half, add_noise=add_noise)
-        c2_train_reps = self._sample_noisy_reps(c2, n_half, add_noise=add_noise)
+        c1_train_reps, stim = self._sample_noisy_reps(c1, n_half,
+                                                      add_noise=add_noise,
+                                                      ret_stim=True)
+        if balance_training:
+            ref_stim = stim
+        else:
+            ref_stim = None
+        c2_train_reps = self._sample_noisy_reps(c2, n_half, add_noise=add_noise,
+                                                ref_stim=ref_stim)
         reps = np.concatenate((c1_train_reps, c2_train_reps), axis=0)
         labels = np.concatenate((np.zeros(n_half), np.ones(n_half)))
         return reps, labels
@@ -234,10 +248,12 @@ class Code(object):
     def decode_rep_classes(self, c1, c2, n_train=10**3, n_test=10**2,
                            n_reps=10, classifier=skc.SVC, kernel='linear',
                            train_noise=True, c1_test=None, c2_test=None,
-                           test_noise=True, **classifier_params):
+                           test_noise=True, balance_training=False,
+                           **classifier_params):
         pcorr = np.zeros(n_reps)
         for i in range(n_reps):
             out = self._make_decoding_reps(c1, c2, n_train,
+                                           balance_training=balance_training,
                                            add_noise=train_noise)
             reps_train, labels_train = out
             if c1_test is None:
