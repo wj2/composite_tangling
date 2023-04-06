@@ -228,7 +228,11 @@ class Code(object):
         else:
             out = r_noisy_reps
         return out
-    
+
+    def sample_stim(self, n_samps=1000):
+        inds = np.random.choice(self.n_stimuli, n_samps)
+        return np.array(self.stim)[inds]
+        
     def _make_decoding_reps(self, c1, c2, n, add_noise=True,
                             balance_training=False):
         n_half = int(n/2)
