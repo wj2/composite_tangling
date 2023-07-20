@@ -407,14 +407,18 @@ def compute_composite_hamming_theory(pwrs, n_feats, n_values, noise_var=1,
     
     n_n, n_d = compute_composite_neighbors_theory(n_feats, n_values)
     nearest_err = n_stim*n_n*sts.norm(0, 1).cdf(-d_near/(2*np.sqrt(noise_var)))
+    nearest_err[nearest_err > 1] = 1
     
     diag_err = n_stim*n_d*sts.norm(0, 1).cdf(-d_diag/(2*np.sqrt(noise_var)))
+    diag_err[diag_err > 1] = 1
     err_types = [nearest_err.T, diag_err.T]
     if n_stim > 1:
         n_fswaps = compute_feature_swaps_theory(n_feats, n_values, n_stim)
         err_swap = n_fswaps*sts.norm(0, 1).cdf(-d_swap/(2*np.sqrt(noise_var)))
+        err_swap[err_swap > 1] = 1
         err_types.append(err_swap.T)
     total_err = np.sum(list(np.mean(et, axis=0) for et in err_types), axis=0)
+    total_err[total_err > 1] = 1
     if mean:
         total_err = np.mean(total_err, axis=0)
         err_types = list(np.mean(et, axis=0) for et in err_types)

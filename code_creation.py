@@ -60,11 +60,12 @@ class Code(object):
                                                          pwr_compute=pwr_func)
         out = self.make_representations(self.encoding_matrix, self.stim_proc)
         self.rep, self.rep_dict = out
-        self.inv_rep_dict = {tuple(v):tuple(k) for k, v in self.rep_dict.items()}
+        self.inv_rep_dict = {tuple(v): tuple(k) for k, v in self.rep_dict.items()}
 
     def make_encoding_matrix(self, n, stim, power=1, eps=10**-4,
                              pwr_compute=nmd.empirical_variance_power_func,
-                             pwr_scale=nmd.l2_filt_scale, orth_basis=True):
+                             pwr_scale=nmd.l2_filt_scale, orth_basis=True,
+                             hetero_scale=0):
         stim = np.array(stim)
         norm_var = np.var(stim, axis=0)
         mat = sts.multivariate_normal(0, 1).rvs((n, stim.shape[1]))
@@ -76,9 +77,14 @@ class Code(object):
         # mat = mat/mat_var
         enc_stim = np.dot(stim, mat.T)
         emp_pwr = pwr_compute(enc_stim)
-        mat = mat*pwr_scale(power, emp_pwr)
+        pwr_mult = pwr_scale(power, emp_pwr)
+        if hetero_scale > 0:
+            pwr_mult *= np.linspace(1 - hetero_scale, 1 + hetero_scale, mat.shape[1])
+            pwr_mult = np.expand_dims(pwr_mult, 0)
+        mat = pwr_mult*mat
         final_power = pwr_compute(np.dot(stim, mat.T))
-        assert np.abs(final_power - power) < eps
+        if hetero_scale == 0:
+            assert np.abs(final_power - power) < eps
         return mat
 
     def get_minimum_distance(self):
