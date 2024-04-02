@@ -444,7 +444,7 @@ class Code(object):
 
 
 class LinearCode(Code):
-    def make_stimuli(self, n_feats, n_values, symm=True):
+    def make_stimuli(self, n_feats, n_values, symm=True, order=None):
         stim = list(it.product(range(n_values), repeat=n_feats))
         stim_proc = list(it.product(np.linspace(-1, 1, n_values), repeat=n_feats))
         stim_dict = dict(zip(stim, stim_proc))
@@ -470,11 +470,18 @@ class DiscreteMixedCode(Code):
         return dn
 
 
-def make_code(tradeoff, total_power, *args, codes=None, **kwargs):
+def make_code(tradeoff, total_power, *args, codes=None, mixing_order=None, **kwargs):
     if codes is None:
         codes = [LinearCode, DiscreteMixedCode]
+    order_list = [None, mixing_order]
     code_props = [tradeoff, 1 - tradeoff]
-    code = CompositeCode(codes, code_props, *args, total_power=total_power, **kwargs)
+    code = CompositeCode(
+        codes,
+        code_props,
+        *args, total_power=total_power,
+        order_list=order_list,
+        **kwargs,
+    )
     return code
 
 
@@ -491,6 +498,7 @@ class CompositeCode(Code):
         stim_kwargs=None,
         code_pwr=nmd.empirical_variance_power_func,
         eps=0.15,
+        order_list=None,
     ):
         if stim_kwargs is None:
             stim_kwargs = ({},) * len(codes)
@@ -498,9 +506,18 @@ class CompositeCode(Code):
             total_power = np.sum(powers)
         else:
             powers = total_power * np.array(powers) / np.sum(powers)
+        if order_list is None:
+            order_list = (None,)*len(codes)
         code_list = []
         for i, code in enumerate(codes):
-            c = code(n_feats, n_values, n_neurs, power=powers[i], **stim_kwargs[i])
+            c = code(
+                n_feats,
+                n_values,
+                n_neurs,
+                power=powers[i],
+                order=order_list[i],
+                **stim_kwargs[i],
+            )
             code_list.append(c)
         self.codes = code_list
         super().__init__(
