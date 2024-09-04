@@ -305,6 +305,7 @@ class Code(object):
         c2_test=None,
         test_noise=True,
         balance_training=False,
+        ret_dprime=False,
         **classifier_params
     ):
         pcorr = np.zeros(n_reps)
@@ -327,7 +328,17 @@ class Code(object):
             reps_test, labels_test = out
             c = classifier(kernel=kernel, **classifier_params)
             c.fit(reps_train, labels_train)
-            pcorr[i] = c.score(reps_test, labels_test)
+            if ret_dprime:
+                dists = c.decision_function(reps_test)
+                l1, l2 = np.unique(labels_test)
+                d_l1 = dists[labels_test == l1]
+                d_l2 = dists[labels_test == l2]
+                pcorr[i] = (
+                    (np.mean(d_l2) - np.mean(d_l1))
+                    / np.sqrt(np.std(d_l1) * np.std(d_l2))
+                )
+            else:
+                pcorr[i] = c.score(reps_test, labels_test)
         return pcorr
 
     def _get_partitions(self, random_thr=100, sample=None):
