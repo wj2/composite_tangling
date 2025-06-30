@@ -25,8 +25,8 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "numpy~=1.26.4",
-  "scipy~=1.14.1",
+  "numpy>=1.26.4",
+  "scipy>=1.14.1",
   "matplotlib>=3.9.2",
   "scikit-learn>=1.5.1",
 ]
